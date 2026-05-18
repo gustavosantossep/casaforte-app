@@ -411,7 +411,8 @@ select option{background:var(--navy2);}
       </div>
     </div>
     <div class="saldo-card">
-      <div style="font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:1.5px;margin-bottom:8px;">SALDO DO PERÍODO</div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:1.5px;margin-bottom:4px;">SALDO DO PERÍODO</div>
+      <div id="h-periodo" style="font-size:11px;color:var(--orange);font-weight:600;margin-bottom:8px;">Carregando...</div>
       <div id="h-saldo" style="font-size:32px;font-weight:900;letter-spacing:-1px;margin-bottom:16px;">—</div>
       <div style="display:grid;grid-template-columns:1fr 1px 1fr;gap:16px;align-items:center;margin-bottom:14px;">
         <div>
@@ -452,6 +453,10 @@ select option{background:var(--navy2);}
     </div>
   </div>
 
+  <!-- Seletor de período -->
+  <div style="padding:12px 16px 0;" id="periodo-wrap">
+    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;" id="mes-chips"></div>
+  </div>
   <div style="padding:12px 16px 16px;" id="sync-wrap">
     <div class="sync-ok" id="sync-bar">
       <span style="font-size:20px;">☁️</span>
@@ -744,7 +749,7 @@ function abrirApp() {
   document.getElementById('nb-home').classList.add('active');
   document.querySelectorAll('.nav-label').forEach(l=>l.style.color='');
   document.querySelectorAll('.nav-btn.active .nav-label').forEach(l=>l.style.color=P.cor);
-  if (P.sheets) setTimeout(()=>token ? carregarSheets() : autGoogle(), 600);
+  if (P.sheets) setTimeout(()=>token ? carregarSheets(periodoAtivo) : autGoogle(), 600);
 }
 
 function sair() {
@@ -760,6 +765,13 @@ function renderHome() {
   document.getElementById('h-sub').style.color=P.cor;
   document.getElementById('h-nome').textContent=P.nome;
   document.getElementById('h-vertodos').style.color=P.cor;
+
+  // Período
+  const agr2 = new Date();
+  const pAt = periodoAtivo||{m:agr2.getMonth()+1,a:agr2.getFullYear()};
+  const nomeMes = new Date(pAt.a,pAt.m-1,1).toLocaleString('pt-BR',{month:'long',year:'numeric'});
+  if(document.getElementById('h-periodo')) 
+    document.getElementById('h-periodo').textContent = nomeMes.charAt(0).toUpperCase()+nomeMes.slice(1);
 
   // Logo
   const hl = document.getElementById('h-logo');
@@ -782,6 +794,8 @@ function renderHome() {
     document.getElementById('h-cheques').textContent = brl(P.totalCheques||0);
     document.getElementById('h-cheques-dest').textContent = brl(P.totalChequesDestinados||0);
   }
+  // Chips de mês
+  renderMesChips();
 
   // Sync bar (só CF)
   document.getElementById('sync-wrap').style.display = P.sheets?'block':'none';
@@ -839,8 +853,46 @@ function autGoogle() {
   if (!tokenClient) return;
   tokenClient.requestAccessToken({prompt:''});
 }
+// ── PERÍODO ──────────────────────────────────────────────────────────────────
+let periodoAtivo = null; // null = mês atual
+
+function renderMesChips() {
+  const el = document.getElementById('mes-chips');
+  if (!el || !P.sheets) { if(el) el.innerHTML=''; return; }
+  
+  const agr = new Date();
+  const meses = [];
+  // Últimos 6 meses + próximo
+  for (let i = -1; i <= 5; i++) {
+    const d = new Date(agr.getFullYear(), agr.getMonth() - i, 1);
+    meses.push({ m: d.getMonth()+1, a: d.getFullYear(), 
+      label: d.toLocaleString('pt-BR',{month:'short',year:'2-digit'}).replace(' de ','/')
+    });
+  }
+  
+  const isAtivo = (mes) => periodoAtivo 
+    ? periodoAtivo.m===mes.m && periodoAtivo.a===mes.a
+    : mes.m===agr.getMonth()+1 && mes.a===agr.getFullYear();
+
+  el.innerHTML = meses.map(mes => `
+    <button onclick="selecionarMes(${mes.m},${mes.a})" 
+      style="padding:6px 14px;border-radius:20px;border:1.5px solid ${isAtivo(mes)?P.cor:'var(--border)'};
+             background:${isAtivo(mes)?P.cor+'22':'var(--navy2)'};
+             color:${isAtivo(mes)?P.cor:'var(--muted)'};
+             font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;
+             font-family:'Inter',sans-serif;">
+      ${mes.label.toUpperCase()}
+    </button>`).join('');
+}
+
+function selecionarMes(m, a) {
+  periodoAtivo = { m, a };
+  if (!token) autGoogle();
+  else carregarSheets(periodoAtivo);
+}
+
 function sync() {
-  if (!token) autGoogle(); else carregarSheets();
+  if (!token) autGoogle(); else carregarSheets(periodoAtivo);
 }
 
 // ── SHEETS ────────────────────────────────────────────────────────────────────
@@ -962,8 +1014,12 @@ async function getSheetId(sheetName) {
   return _sheetIds[sheetName];
 }
 
-async function carregarSheets() {
+async function carregarSheets(filtroMes=null) {
   loading('Sincronizando com Google Sheets...');
+
+  // Período padrão: mês atual
+  const agr = new Date();
+  const mesAtual = filtroMes || { m: agr.getMonth()+1, a: agr.getFullYear() };
 
   // ── LÓGICA FINANCEIRA CORRETA ────────────────────────────────────────────
   // ENTRADAS REAIS: Vendas apenas (dinheiro efetivamente recebido)
@@ -1029,12 +1085,20 @@ async function carregarSheets() {
         const cat = cfg.colCat !== undefined ? String(row[cfg.colCat]||'') : '';
 
         // Tipo de lançamento
+        // Filtrar por período selecionado
+        const dLanc = parseData(dataStr.length<=5 ? dataStr+'/'+mesAtual.a : dataStr);
+        const dentroDoMes = dLanc && dLanc.getMonth()+1===mesAtual.m && dLanc.getFullYear()===mesAtual.a;
+
         if (cfg.tipo === 'entrada') {
-          totalEntradas += val;
-          P.lancs.push({data:dataStr, d:desc.slice(0,40), v:val, tipo:'e', aba:cfg.nome});
+          if (dentroDoMes) {
+            totalEntradas += val;
+            P.lancs.push({data:dataStr, d:desc.slice(0,40), v:val, tipo:'e', aba:cfg.nome});
+          }
         } else if (cfg.tipo === 'saida') {
-          totalSaidas += val;
-          P.lancs.push({data:dataStr, d:desc.slice(0,40), v:val, tipo:'s', aba:cfg.nome, cat});
+          if (dentroDoMes) {
+            totalSaidas += val;
+            P.lancs.push({data:dataStr, d:desc.slice(0,40), v:val, tipo:'s', aba:cfg.nome, cat});
+          }
         } else if (cfg.tipo === 'cheque') {
           // Cheque cliente: entra como entrada (venda recebida)
           // Mas registrar finalidade para controle
@@ -1047,16 +1111,18 @@ async function carregarSheets() {
 
           const dono = String(row[3]||'').trim();
           const fin = finalidade || 'Em carteira';
-          P.lancs.push({
-            data:dataStr, 
-            d:('Cheq. '+dono).slice(0,40), 
-            v:val, 
-            tipo:'e', 
-            aba:cfg.nome,
-            chequeNum: String(row[2]||''),
-            dono, fin,
-            isCheque:true,
-          });
+          if (dentroDoMes) {
+            P.lancs.push({
+              data:dataStr,
+              d:('Cheq. '+dono).slice(0,40),
+              v:val,
+              tipo:'e',
+              aba:cfg.nome,
+              chequeNum: String(row[2]||''),
+              dono, fin,
+              isCheque:true,
+            });
+          }
         }
       });
     });
@@ -1102,7 +1168,11 @@ function renderLanc() {
   lp.textContent=P.nome; lp.style.color=P.cor;
   const chips=document.getElementById('l-chips');
   chips.innerHTML='';
-  P.abas.forEach((a,i)=>{
+  // Adicionar aba manual para Casa Forte
+  const abasList = P.sheets 
+    ? [...P.abas, {id:'manual',label:'✏️ Manual',icon:'📋',cor:'var(--muted)'}]
+    : P.abas;
+  abasList.forEach((a,i)=>{
     const b=document.createElement('button');
     b.className='chip'+(i===0?' active':'');
     b.style.cssText=i===0?`border-color:${a.cor};background:${a.cor}22;color:${a.cor};`:'';
@@ -1395,6 +1465,16 @@ async function salvar() {
     case 'custos_boi': linha=[data,val,g('f-desc')||sel.cat||'',sel.cat||'']; break;
     case 'vendas_boi': linha=[data,val,g('f-desc')||'',(g('f-peso')||'')+'kg — '+(g('f-comp')||'')]; tipo='e'; break;
     case 'racao':      linha=[data,val,g('f-desc')||sel.cat||'',sel.cat||'']; break;
+    case 'manual':
+      const abaManual = document.getElementById('f-aba-manual')?.value||'despesas';
+      abaChipAtivo = abaManual; // redirecionar para aba correta
+      const isEntradaManual = ['vendas','cheques_cli'].includes(abaManual);
+      if(abaManual==='notas') linha=[g('f-desc')||'', data, val];
+      else if(abaManual==='abastecimento') linha=[data,val,g('f-comp2')||'Moto','-'];
+      else if(abaManual==='vales') linha=[data,val,g('f-desc')||'—',g('f-comp2')||'Manual','PAGO'];
+      else linha=[data,val,g('f-desc')||'',g('f-comp2')||''];
+      tipo=isEntradaManual?'e':'s';
+      break;
     default: linha=[data,val,g('f-desc')||abaAtiva];
   }
 
