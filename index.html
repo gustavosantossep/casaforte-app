@@ -823,21 +823,25 @@ function renderHome() {
 function itemHI(l) {
   const e=l.tipo==='e';
   const isCheq=l.isCheque||false;
-  const cor=e?'var(--green)':'var(--red)';
-  const bg=e?'var(--green-dim)':'var(--red-dim)';
+  // Cheque não contabilizado = anterior à data de corte (contabilizado===false explicitamente)
+  const naoContab = isCheq && l.contabilizado === false;
+  const cor = naoContab ? 'var(--muted)' : (e?'var(--green)':'var(--red)');
+  const bg  = naoContab ? 'rgba(120,120,120,0.15)' : (e?'var(--green-dim)':'var(--red-dim)');
   const icon=isCheq?'🧾':e?'↑':'↓';
   const sub=isCheq&&l.fin?`<div style="font-size:10px;color:var(--orange);margin-top:1px;">→ ${l.fin.slice(0,25)}</div>`:'';
   const catTag=l.cat?`<span style="font-size:9px;color:var(--muted2);background:var(--navy);border-radius:4px;padding:1px 5px;">${l.cat}</span>`:'';
-  return `<div class="hi">
+  const naoContabTag = naoContab ? `<span style="font-size:9px;color:var(--muted2);background:rgba(255,255,255,0.07);border-radius:4px;padding:1px 5px;margin-left:4px;">não contab.</span>` : '';
+  const valorTxt = naoContab ? brl(l.v) : `${e?'+ ':'- '}${brl(l.v)}`;
+  return `<div class="hi" style="${naoContab?'opacity:0.6;':''}">
     <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
       <div style="width:38px;height:38px;border-radius:10px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:${isCheq?'16':'14'}px;flex-shrink:0;">${icon}</div>
       <div style="min-width:0;">
         <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l.d}</div>
-        <div style="font-size:11px;color:var(--muted);">${l.data} ${catTag}</div>
+        <div style="font-size:11px;color:var(--muted);">${l.data} ${catTag}${naoContabTag}</div>
         ${sub}
       </div>
     </div>
-    <div style="font-size:13px;color:${cor};font-weight:700;text-align:right;flex-shrink:0;margin-left:8px;">${e?'+ ':'- '}${brl(l.v)}</div>
+    <div style="font-size:13px;color:${cor};font-weight:700;text-align:right;flex-shrink:0;margin-left:8px;">${valorTxt}</div>
   </div>`;
 }
 
@@ -1100,12 +1104,19 @@ async function carregarSheets(filtroMes=null) {
             P.lancs.push({data:dataStr, d:desc.slice(0,40), v:val, tipo:'s', aba:cfg.nome, cat});
           }
         } else if (cfg.tipo === 'cheque') {
-          // Cheque cliente: entra como entrada (venda recebida)
-          // Mas registrar finalidade para controle
+          // DATA DE CORTE: 19/05/2026
+          // Antes dessa data: cheques NÃO entram no saldo (eram duplicata com Vendas)
+          // A partir dessa data: cheques SIM entram no saldo (substituem o lançamento em Vendas)
+          const DATA_CORTE_CHEQUES = new Date(2026, 4, 19); // 19/05/2026 (mês é 0-based)
+          const dCheque = dLanc || null;
+          const chequeContabiliza = dCheque && dCheque >= DATA_CORTE_CHEQUES;
+
           const finalidade = String(row[5]||'').trim();
           const destinado = finalidade && finalidade !== '-' && finalidade !== '-------------' && finalidade !== '';
-          
-          totalEntradas += val;
+
+          if (chequeContabiliza) {
+            totalEntradas += val;
+          }
           if (destinado) totalChequesDestinados += val;
           totalChequesRecebidos += val;
 
@@ -1121,6 +1132,7 @@ async function carregarSheets(filtroMes=null) {
               chequeNum: String(row[2]||''),
               dono, fin,
               isCheque:true,
+              contabilizado: chequeContabiliza, // indica se entrou no saldo
             });
           }
         }
