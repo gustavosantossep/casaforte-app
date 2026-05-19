@@ -470,7 +470,7 @@ select option{background:var(--navy2);}
 </div>
 
 <!-- ██ LANÇAR ██ -->
-<div class="screen" id="s-lanc">
+<div class="screen" id="s-lanc" style="padding-bottom:120px;">
   <div style="background:var(--navy2);padding:20px 16px 16px;border-bottom:1px solid var(--border);">
     <div id="l-perfil" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;"></div>
     <div style="font-size:20px;font-weight:800;">Novo Lançamento</div>
@@ -552,18 +552,35 @@ select option{background:var(--navy2);}
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const CLIENT_ID = '533156941517-i60i5doljd5b7hh1kn7qsgfvg9b6o98f.apps.googleusercontent.com';
 const SHEET_ID  = '1dGC0ElZ-_q5JwAWUrDFw-htDtbm07ygNsaFdT7whkGE';
+const SHEET_ID_CONF = '1qPKxRdDyqY531-slZG_4BwcnAVLjCZNK4c_6kEtmxhI';
+const SHEET_ID_PART = '1J38AVVEBOG7wqStky_U2_M-OfsSPTIlVHqwIRzVcjuQ';
+// Retorna o Sheet ID do perfil ativo (Casa Forte ou Confina)
+function getActiveSheetId() {
+  return (P && P.sheetId) ? P.sheetId : SHEET_ID;
+}
 const PIN       = '1914';
 
 // Mapeamento aba-app → nome real na planilha
 const ABA_SHEET = {
+  // Casa Forte
   vendas:       '💰 VENDAS',
   despesas:     '📤 DESPESAS EMPRESA',
   cheques_emit: '📝 CHEQUES EMITIDOS',
   cheques_cli:  '🧾 CHEQUES CLIENTES',
   notas:        '🗒 NOTAS SEM BOLETOS',
-  comissoes:    '📤 DESPESAS EMPRESA', // Comissões lançadas como despesa
+  comissoes:    '📤 DESPESAS EMPRESA',
   abastecimento:'⛽ ABASTECIMENTO',
   vales:        '👷 VALES FUNC.',
+  // Particular
+  part_desp:    '🏠 DESPESAS',
+  part_rec:     '💵 RECEITAS',
+  part_inv:     '📈 INVESTIMENTOS',
+  // Confina Forte
+  cf_lotes:     '🐄 LOTES',
+  cf_movs:      '📋 MOVIMENTAÇÕES',
+  cf_custos:    '💰 CUSTOS',
+  cf_pesagens:  '⚖️ PESAGENS',
+  cf_vales:     '👷 VALES',
 };
 
 // Colunas por aba (para validação)
@@ -599,22 +616,22 @@ const PERFIS = {
   },
   particular: {
     nome:'Particular', sub:'Despesas Pessoais',
-    cor:'#A855F7', id:'particular', sheets:false,
+    cor:'#A855F7', id:'particular', sheets:true, sheetId: SHEET_ID_PART,
     abas:[
-      {id:'desp_part',   label:'Despesas',        icon:'🏠', cor:'#EF4444'},
-      {id:'receitas',    label:'Receitas',         icon:'💵', cor:'#22C55E'},
-      {id:'invest',      label:'Investimentos',    icon:'📈', cor:'#3B82F6'},
+      {id:'part_desp',   label:'Despesas',        icon:'🏠', cor:'#EF4444'},
+      {id:'part_rec',    label:'Receitas',         icon:'💵', cor:'#22C55E'},
+      {id:'part_inv',    label:'Investimentos',    icon:'📈', cor:'#3B82F6'},
     ],
   },
   confina: {
     nome:'Confina Forte', sub:'Confinamento Bovino',
-    cor:'#14B8A6', id:'confina', sheets:false,
+    cor:'#14B8A6', id:'confina', sheets:true, sheetId: SHEET_ID_CONF,
     abas:[
-      {id:'animais',     label:'Animais',          icon:'🐄', cor:'#14B8A6'},
-      {id:'custos_boi',  label:'Custos',           icon:'💰', cor:'#EF4444'},
-      {id:'vendas_boi',  label:'Vendas',           icon:'🤝', cor:'#22C55E'},
-      {id:'racao',       label:'Ração/Insumos',    icon:'🌾', cor:'#F59E0B'},
-      {id:'vales_conf',  label:'Vales Func.',      icon:'👷', cor:'#EC4899'},
+      {id:'cf_lotes',    label:'Lotes',            icon:'🐄', cor:'#14B8A6'},
+      {id:'cf_movs',     label:'Movimentações',    icon:'📋', cor:'#3B82F6'},
+      {id:'cf_custos',   label:'Custos',           icon:'💰', cor:'#EF4444'},
+      {id:'cf_pesagens', label:'Pesagens',         icon:'⚖️', cor:'#F59E0B'},
+      {id:'cf_vales',    label:'Vales Func.',      icon:'👷', cor:'#EC4899'},
     ],
   },
 };
@@ -901,14 +918,14 @@ function sync() {
 
 // ── SHEETS ────────────────────────────────────────────────────────────────────
 async function sheetsGet(range) {
-  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}`,
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(range)}`,
     {headers:{Authorization:`Bearer ${token}`}});
   if (!r.ok) throw new Error('Sheets erro');
   return r.json();
 }
 async function sheetsGetAll(sheet) {
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheet+'!A:F')}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(sheet+'!A:F')}`,
     {headers:{Authorization:`Bearer ${token}`}}
   );
   if (!r.ok) throw new Error('Get erro');
@@ -917,7 +934,7 @@ async function sheetsGetAll(sheet) {
 
 async function sheetsBatchUpdate(requests) {
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}:batchUpdate`,
     {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({requests})}
   );
@@ -927,7 +944,7 @@ async function sheetsBatchUpdate(requests) {
 
 async function sheetsUpdateCell(range, values) {
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
     {method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({values})}
   );
@@ -955,7 +972,7 @@ async function sheetsAppend(sheet, values) {
   if (subtotalRow === -1) {
     // Sem subtotal — append normal no final
     const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheet+'!A:F')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(sheet+'!A:F')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
         body:JSON.stringify({values})}
     );
@@ -1008,7 +1025,7 @@ const _sheetIds = {};
 async function getSheetId(sheetName) {
   if (_sheetIds[sheetName]) return _sheetIds[sheetName];
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}?fields=sheets.properties`,
     {headers:{Authorization:`Bearer ${token}`}}
   );
   const data = await r.json();
@@ -1571,7 +1588,11 @@ function filtrar() {
   });
 
   let e=0,s=0;
-  filt.forEach(l=>{if(l.tipo==='e')e+=l.v;else s+=l.v;});
+  filt.forEach(l=>{
+    // Cheques não contabilizados (anteriores ao corte 19/05/2026) não entram no saldo
+    if(l.tipo==='e' && l.contabilizado===false) return;
+    if(l.tipo==='e') e+=l.v; else s+=l.v;
+  });
   const saldo=e-s;
 
   document.getElementById('r-ent').textContent='+ '+brl(e);
