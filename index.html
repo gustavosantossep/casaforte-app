@@ -338,7 +338,7 @@ select option{background:var(--navy2);}
       <div style="flex:1;">
         <div style="font-size:16px;font-weight:800;margin-bottom:3px;">Particular</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Despesas Pessoais</div>
-        <div style="font-size:10px;color:var(--muted2);">📱 Armazenamento local</div>
+        <div style="font-size:10px;color:var(--green);">☁️ Google Sheets</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
         <span class="badge badge-lock">🔒 PIN</span>
@@ -355,7 +355,7 @@ select option{background:var(--navy2);}
       <div style="flex:1;">
         <div style="font-size:16px;font-weight:800;margin-bottom:3px;">Confina Forte</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Confinamento Bovino</div>
-        <div style="font-size:10px;color:var(--muted2);">📱 Armazenamento local</div>
+        <div style="font-size:10px;color:var(--green);">☁️ Google Sheets</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
         <span class="badge badge-lock">🔒 PIN</span>
@@ -1036,6 +1036,10 @@ async function getSheetId(sheetName) {
 }
 
 async function carregarSheets(filtroMes=null) {
+  // Rotear para a função correta conforme o perfil ativo
+  if (P && P.id === 'particular') return carregarSheetsParticular(filtroMes);
+  if (P && P.id === 'confina')    return carregarSheetsConfina(filtroMes);
+  // Default: Casa Forte
   loading('Sincronizando com Google Sheets...');
 
   // Período padrão: mês atual
@@ -1175,6 +1179,146 @@ async function carregarSheets(filtroMes=null) {
   } catch(err) {
     console.error(err);
     setSyncOk(false);
+    toast('Erro ao sincronizar: '+err.message,'err');
+  } finally { unload(); }
+}
+
+// ── CARREGAR SHEETS: PARTICULAR ──────────────────────────────────────────────
+async function carregarSheetsParticular(filtroMes=null) {
+  loading('Sincronizando Particular...');
+  const agr = new Date();
+  const mesAtual = filtroMes || { m: agr.getMonth()+1, a: agr.getFullYear() };
+
+  const ABAS_PART = [
+    { nome:'🏠 DESPESAS',      tipo:'saida',   colVal:1, colData:0, colDesc:2, colCat:4 },
+    { nome:'💵 RECEITAS',      tipo:'entrada', colVal:1, colData:0, colDesc:3           },
+    { nome:'📈 INVESTIMENTOS', tipo:'saida',   colVal:1, colData:0, colDesc:3           },
+  ];
+
+  try {
+    const results = await Promise.all(
+      ABAS_PART.map(a => sheetsGet(a.nome+'!A:F').catch(()=>({values:[]})))
+    );
+
+    P.lancs=[]; let totalEnt=0, totalSai=0;
+
+    results.forEach((data,i) => {
+      const cfg = ABAS_PART[i];
+      const rows = data.values||[];
+      rows.forEach(row => {
+        if (!row[0]) return;
+        const r0 = String(row[0]).trim();
+        if (!r0 || r0==='DATA' || r0.startsWith('TOTAL')) return;
+        const valRaw = row[cfg.colVal];
+        if (!valRaw) return;
+        const val = parseFloat(String(valRaw).replace(/[R$\s.]/g,'').replace(',','.'));
+        if (!val || val<=0 || isNaN(val)) return;
+
+        let dataStr = r0;
+        if (!isNaN(r0) && +r0 > 40000) {
+          const d = new Date((+r0-25569)*86400*1000);
+          dataStr = fmtD(d);
+        }
+        if (dataStr.length>10) dataStr=dataStr.slice(0,10);
+
+        // Filtrar por mês
+        const dLanc = parseData(dataStr.length<=5 ? dataStr+'/'+mesAtual.a : dataStr);
+        const dentroDoMes = dLanc && dLanc.getMonth()+1===mesAtual.m && dLanc.getFullYear()===mesAtual.a;
+
+        const desc = String(row[cfg.colDesc]||cfg.nome).trim()||cfg.nome;
+        const cat  = cfg.colCat!==undefined ? String(row[cfg.colCat]||'') : '';
+
+        if (cfg.tipo==='entrada') totalEnt+=val; else totalSai+=val;
+
+        if (dentroDoMes) {
+          P.lancs.push({ data:dataStr, d:desc.slice(0,40), v:val, tipo:cfg.tipo==='entrada'?'e':'s', aba:cfg.nome, cat });
+        }
+      });
+    });
+
+    P.lancs.sort((a,b)=>{ const da=parseData(a.data),db=parseData(b.data); return (db||0)-(da||0); });
+    P.entradas=totalEnt; P.saidas=totalSai; P.saldo=totalEnt-totalSai;
+    P.lancs=P.lancs.slice(0,150);
+    renderHome(); setSyncOk(true); toast('✓ Particular sincronizado!','ok');
+  } catch(err) {
+    console.error(err); setSyncOk(false);
+    toast('Erro ao sincronizar: '+err.message,'err');
+  } finally { unload(); }
+}
+
+// ── CARREGAR SHEETS: CONFINA FORTE ────────────────────────────────────────────
+async function carregarSheetsConfina(filtroMes=null) {
+  loading('Sincronizando Confina Forte...');
+  const agr = new Date();
+  const mesAtual = filtroMes || { m: agr.getMonth()+1, a: agr.getFullYear() };
+
+  // Abas do Confina com suas colunas
+  const ABAS_CONF = [
+    // [nome_planilha, tipo, colData, colVal, colDesc, colunas_extras]
+    { nome:'🐄 LOTES',         tipo:'entrada', colData:1, colVal:8, colDesc:3  }, // Custo compra
+    { nome:'📋 MOVIMENTAÇÕES', tipo:'mista',   colData:0, colVal:7, colDesc:8, colTipo:2  },
+    { nome:'💰 CUSTOS',        tipo:'saida',   colData:0, colVal:8, colDesc:3  },
+    { nome:'⚖️ PESAGENS',      tipo:'info',    colData:0, colVal:4, colDesc:1  },
+    { nome:'👷 VALES',         tipo:'saida',   colData:0, colVal:3, colDesc:1  },
+  ];
+
+  try {
+    const results = await Promise.all(
+      ABAS_CONF.map(a => sheetsGet(a.nome+'!A:J').catch(()=>({values:[]})))
+    );
+
+    P.lancs=[]; let totalEnt=0, totalSai=0;
+
+    results.forEach((data,i) => {
+      const cfg = ABAS_CONF[i];
+      const rows = data.values||[];
+      rows.forEach(row => {
+        if (!row[0]) return;
+        const r0 = String(row[0]).trim();
+        if (!r0 || r0==='DATA' || r0==='ID LOTE' || r0.startsWith('TOTAL')) return;
+
+        const valRaw = row[cfg.colVal];
+        if (!valRaw) return;
+        const val = parseFloat(String(valRaw).replace(/[R$\s.]/g,'').replace(',','.'));
+        if (!val || val<=0 || isNaN(val)) return;
+
+        let dataStr = String(row[cfg.colData]||'').trim();
+        if (!isNaN(dataStr) && +dataStr>40000) {
+          const d = new Date((+dataStr-25569)*86400*1000);
+          dataStr = fmtD(d);
+        }
+        if (dataStr.length>10) dataStr=dataStr.slice(0,10);
+
+        const dLanc = parseData(dataStr.length<=5 ? dataStr+'/'+mesAtual.a : dataStr);
+        const dentroDoMes = dLanc && dLanc.getMonth()+1===mesAtual.m && dLanc.getFullYear()===mesAtual.a;
+
+        const desc = String(row[cfg.colDesc]||cfg.nome).trim()||cfg.nome;
+
+        // Tipo de lançamento
+        let tipo = cfg.tipo==='entrada'?'e':'s';
+        if (cfg.tipo==='mista') {
+          const tipoMov = String(row[cfg.colTipo]||'').toLowerCase();
+          tipo = tipoMov.includes('venda') ? 'e' : 's';
+        }
+        if (cfg.tipo==='info') tipo='s'; // pesagens: não soma no financeiro, só exibe
+
+        if (cfg.tipo!=='info') {
+          if (tipo==='e') totalEnt+=val; else totalSai+=val;
+        }
+
+        if (dentroDoMes) {
+          P.lancs.push({ data:dataStr, d:desc.slice(0,40), v:val, tipo, aba:cfg.nome });
+        }
+      });
+    });
+
+    P.lancs.sort((a,b)=>{ const da=parseData(a.data),db=parseData(b.data); return (db||0)-(da||0); });
+    P.entradas=totalEnt; P.saidas=totalSai; P.saldo=totalEnt-totalSai;
+    P.totalCheques=0; P.totalChequesDestinados=0;
+    P.lancs=P.lancs.slice(0,150);
+    renderHome(); setSyncOk(true); toast('✓ Confina sincronizado!','ok');
+  } catch(err) {
+    console.error(err); setSyncOk(false);
     toast('Erro ao sincronizar: '+err.message,'err');
   } finally { unload(); }
 }
@@ -1351,59 +1495,79 @@ function renderForm(abaId, cor) {
           <div class="chips-wrap">${mkChips(['PAGO','PENDENTE'],'status',cor,'PAGO')}</div></div>`;
       break;
 
-    // PARTICULAR
-    case 'desp_part':
-      const cats_p=['Alimentação','Saúde','Educação','Transporte','Lazer','Contas','Vestuário','Outros'];
+    // ── PARTICULAR ──────────────────────────────────────────────────────────
+    case 'part_desp':
       html=`${baseDataValor}
         <div class="fg"><label class="lbl">Categoria</label>
-          <div class="chips-wrap">${mkChips(cats_p,'cat',cor)}</div></div>
+          <div class="chips-wrap">${mkChips(['Alimentação','Saúde','Educação','Transporte','Lazer','Contas','Vestuário','Outros'],'cat',cor)}</div></div>
         ${campo('Descrição','f-desc','Ex: supermercado, farmácia...')}
         <div class="fg"><label class="lbl">Forma</label>
-          <div class="chips-wrap">${mkChips(['Pix','Dinheiro','Débito','Crédito'],'forma',cor)}</div></div>`;
+          <div class="chips-wrap">${mkChips(['Pix','Dinheiro','Débito','Crédito'],'forma',cor)}</div></div>
+        ${campo('Mês Ref.','f-mes','Ex: Mai/2026')}`;
       break;
 
-    case 'receitas':
+    case 'part_rec':
       html=`${baseDataValor}
         <div class="fg"><label class="lbl">Tipo</label>
           <div class="chips-wrap">${mkChips(['Salário','Pró-labore','Aluguel Recebido','Outros'],'cat',cor)}</div></div>
-        ${campo('Descrição','f-desc','Descrição da receita')}`;
+        ${campo('Descrição','f-desc','Descrição da receita')}
+        ${campo('Mês Ref.','f-mes','Ex: Mai/2026')}`;
       break;
 
-    case 'invest':
+    case 'part_inv':
       html=`${baseDataValor}
         <div class="fg"><label class="lbl">Tipo</label>
           <div class="chips-wrap">${mkChips(['Renda Fixa','Ações','FII','Poupança','Outros'],'cat',cor)}</div></div>
-        ${campo('Descrição','f-desc','Ex: CDB, Tesouro Direto...')}`;
+        ${campo('Descrição','f-desc','Ex: CDB, Tesouro Direto...')}
+        ${campo('Mês Ref.','f-mes','Ex: Mai/2026')}`;
       break;
 
-    // CONFINA
-    case 'animais':
+    // ── CONFINA FORTE ────────────────────────────────────────────────────────
+    case 'cf_lotes':
       html=`${baseDataValor}
-        <div class="fg"><label class="lbl">Operação</label>
-          <div class="chips-wrap">${mkChips(['Compra','Venda','Morte','Transferência'],'op',cor)}</div></div>
-        ${campo('Lote / Quantidade','f-desc','Ex: Lote 5 — 12 bois nelore')}
-        ${campo('Peso Médio (kg)','f-peso','Ex: 420','number','inputmode="decimal"')}`;
+        ${campo('ID do Lote','f-id','Ex: LOTE-001')}
+        <div class="fg"><label class="lbl">Raça / Tipo</label>
+          <div class="chips-wrap">${mkChips(['Nelore','Angus','Brangus','Girolando','Cruzado','Outros'],'raca',cor)}</div></div>
+        ${campo('Origem / Fazenda','f-desc','Nome da fazenda ou vendedor')}
+        ${campo('Nº Animais','f-qtd','Ex: 30','number','inputmode="numeric"')}
+        ${campo('Peso Médio Entrada (kg)','f-peso','Ex: 380','number','inputmode="decimal"')}`;
       break;
 
-    case 'custos_boi':
+    case 'cf_movs':
       html=`${baseDataValor}
+        ${campo('ID do Lote','f-id','Ex: LOTE-001')}
+        <div class="fg"><label class="lbl">Tipo</label>
+          <div class="chips-wrap">${mkChips(['Entrada Compra','Saída Venda','Morte/Descarte','Transferência'],'tipo_mov',cor)}</div></div>
+        ${campo('Nº Animais','f-qtd','Ex: 5','number','inputmode="numeric"')}
+        ${campo('Peso Médio (kg)','f-peso','Ex: 420','number','inputmode="decimal"')}
+        ${campo('Contraparte','f-desc','Comprador / Vendedor')}`;
+      break;
+
+    case 'cf_custos':
+      html=`${baseDataValor}
+        ${campo('ID do Lote (opcional)','f-id','Ex: LOTE-001')}
         <div class="fg"><label class="lbl">Categoria</label>
-          <div class="chips-wrap">${mkChips(['Ração','Silagem','Sal Mineral','Medicamentos','Veterinário','Mão de Obra','Aluguel Pasto','Outros'],'cat',cor)}</div></div>
+          <div class="chips-wrap">${mkChips(['Ração','Silagem','Sal Mineral','Medicamentos','Veterinário','Mão de Obra','Aluguel Pasto','Transporte','Outros'],'cat',cor)}</div></div>
         ${campo('Fornecedor / Descrição','f-desc','Ex: ração concentrada Purina...')}`;
       break;
 
-    case 'vendas_boi':
+    case 'cf_pesagens':
       html=`${baseDataValor}
-        ${campo('Lote / Qtd Animais','f-desc','Ex: Lote 4 — 12 bois')}
-        ${campo('Peso Total (kg)','f-peso','Ex: 8400','number','inputmode="decimal"')}
-        ${campo('Comprador','f-comp','Nome do comprador')}`;
+        ${campo('ID do Lote','f-id','Ex: LOTE-001')}
+        ${campo('Nº Animais Pesados','f-qtd','Ex: 30','number','inputmode="numeric"')}
+        ${campo('Peso Médio Atual (kg)','f-peso','Ex: 450','number','inputmode="decimal"')}
+        ${campo('Peso Médio Anterior (kg)','f-peso_ant','Ex: 410','number','inputmode="decimal"')}
+        ${campo('Dias desde última pesagem','f-dias','Ex: 28','number','inputmode="numeric"')}`;
       break;
 
-    case 'racao':
+    case 'cf_vales':
+      const funcsConf = P.id==='confina' ? FUNCS_CONF : FUNCS_CF;
       html=`${baseDataValor}
+        <div class="fg"><label class="lbl">Funcionário</label>
+          <div class="chips-wrap">${mkChips(funcsConf.map(f=>f.n),'func',cor)}</div></div>
         <div class="fg"><label class="lbl">Tipo</label>
-          <div class="chips-wrap">${mkChips(['Ração Concentrada','Silagem','Sal Mineral','Suplemento','Outros'],'cat',cor)}</div></div>
-        ${campo('Fornecedor / Quantidade','f-desc','Ex: 5 ton ração Purina')}`;
+          <div class="chips-wrap">${mkChips(['Vale','Adiantamento','Acerto'],'tipo_v',cor)}</div></div>
+        ${campo('ID Lote (opcional)','f-id','Se vinculado a um lote')}`;
       break;
 
     default:
@@ -1481,19 +1645,46 @@ async function salvar() {
       const descVale = (sel.tipo_v||'Vale')+' — '+(sel.forma||'Dinheiro');
       linha=[data, val, nomeFuncionario, descVale, sel.status||'PAGO'];
       break;
-    // Particular
-    case 'desp_part': linha=[data,val,g('f-desc')||sel.cat||'',sel.cat||'']; break;
-    case 'receitas':  linha=[data,val,g('f-desc')||sel.cat||'',sel.cat||'']; tipo='e'; break;
-    case 'invest':    linha=[data,val,g('f-desc')||sel.cat||'',sel.cat||'']; break;
-    // Confina
-    case 'animais':
-      const opAnim=sel.op||'Compra';
-      linha=[data,val,g('f-desc')||'',opAnim+' — '+(g('f-peso')||'')+'kg'];
-      tipo=opAnim==='Venda'?'e':'s';
-      break;
-    case 'custos_boi': linha=[data,val,g('f-desc')||sel.cat||'',sel.cat||'']; break;
-    case 'vendas_boi': linha=[data,val,g('f-desc')||'',(g('f-peso')||'')+'kg — '+(g('f-comp')||'')]; tipo='e'; break;
-    case 'racao':      linha=[data,val,g('f-desc')||sel.cat||'',sel.cat||'']; break;
+    // ── PARTICULAR ──────────────────────────────────────────────────────────
+    // Estrutura planilha: DATA, VALOR, CATEGORIA, FORMA_PGTO, DESCRIÇÃO, MÊS
+    case 'part_desp':
+      linha=[data, val, sel.cat||'Outros', sel.forma||'Pix', g('f-desc')||sel.cat||'', g('f-mes')||''];
+      tipo='s'; break;
+    case 'part_rec':
+      linha=[data, val, sel.cat||'Salário', g('f-desc')||sel.cat||'', g('f-mes')||''];
+      tipo='e'; break;
+    case 'part_inv':
+      linha=[data, val, sel.cat||'Outros', g('f-desc')||sel.cat||'', g('f-mes')||''];
+      tipo='s'; break;
+
+    // ── CONFINA FORTE ────────────────────────────────────────────────────────
+    // cf_lotes: ID LOTE, DATA ENTRADA, RAÇA, ORIGEM, Nº ANIMAIS, PESO MÉD, PESO TOTAL(auto), R$/kg, CUSTO(auto)
+    case 'cf_lotes':
+      if(!g('f-id')){msgValidacao='Informe o ID do Lote.'; validacaoOk=false;}
+      linha=[g('f-id')||'', data, sel.raca||g('f-raca')||'', g('f-desc')||'', g('f-qtd')||'', g('f-peso')||'', '', val/Math.max(+(g('f-peso')||1)*Math.max(+(g('f-qtd')||1),1),1), ''];
+      tipo='s'; break;
+
+    // cf_movs: DATA, ID LOTE, TIPO MOV, Nº ANIMAIS, PESO MÉD, PESO TOTAL(auto), R$/kg, VALOR TOTAL(auto), CONTRAPARTE
+    case 'cf_movs':
+      const tipoMov = sel.tipo_mov||'Entrada Compra';
+      linha=[data, g('f-id')||'', tipoMov, g('f-qtd')||'', g('f-peso')||'', '', val/Math.max(+(g('f-peso')||1)*Math.max(+(g('f-qtd')||1),1),1), '', g('f-desc')||''];
+      tipo=tipoMov.includes('Venda')?'e':'s'; break;
+
+    // cf_custos: DATA, ID LOTE, CATEGORIA, SUBCATEGORIA, FORNECEDOR, QTD, UNID, VALOR UNIT, VALOR TOTAL(auto)
+    case 'cf_custos':
+      linha=[data, g('f-id')||'', sel.cat||'Outros', '', g('f-desc')||sel.cat||'', '1', 'un', val, ''];
+      tipo='s'; break;
+
+    // cf_pesagens: DATA PESAGEM, ID LOTE, Nº ANIMAIS, PESO MÉD, PESO TOTAL(auto), PESO ANT, GANHO(auto), DIAS DESDE ANT, GMD(auto)
+    case 'cf_pesagens':
+      linha=[data, g('f-id')||'', g('f-qtd')||'', g('f-peso')||'', '', g('f-peso_ant')||'', '', g('f-dias')||'', ''];
+      tipo='s'; break;
+
+    // cf_vales: DATA, FUNCIONÁRIO, TIPO, VALOR, ID LOTE (opcional)
+    case 'cf_vales':
+      if(!sel.func){msgValidacao='Selecione o funcionário.'; validacaoOk=false;}
+      linha=[data, sel.func||'—', sel.tipo_v||'Vale', val, g('f-id')||''];
+      tipo='s'; break;
     case 'manual':
       const abaManual = document.getElementById('f-aba-manual')?.value||'despesas';
       abaChipAtivo = abaManual; // redirecionar para aba correta
