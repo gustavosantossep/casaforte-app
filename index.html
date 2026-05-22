@@ -551,7 +551,7 @@ select option{background:var(--navy2);}
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const CLIENT_ID = '533156941517-i60i5doljd5b7hh1kn7qsgfvg9b6o98f.apps.googleusercontent.com';
-const SHEET_ID  = '1dGC0ElZ-_q5JwAWUrDFw-htDtbm07ygNsaFdT7whkGE';
+const SHEET_ID  = '1E6DV8QgE36A0rn2T8Rlor6sqD6MX5L5dGEXLTvj_Ad0';
 const SHEET_ID_CONF = '1qPKxRdDyqY531-slZG_4BwcnAVLjCZNK4c_6kEtmxhI';
 const SHEET_ID_PART = '1J38AVVEBOG7wqStky_U2_M-OfsSPTIlVHqwIRzVcjuQ';
 // Retorna o Sheet ID do perfil ativo (Casa Forte ou Confina)
@@ -570,7 +570,7 @@ const ABA_SHEET = {
   notas:        '🗒 NOTAS SEM BOLETOS',
   comissoes:    '📤 DESPESAS EMPRESA',
   abastecimento:'⛽ ABASTECIMENTO',
-  vales:        '👷 VALES FUNC.',
+  vales:        '👷 VALES GERAL',
   // Particular
   part_desp:    '🏠 DESPESAS',
   part_rec:     '💵 RECEITAS',
@@ -1058,7 +1058,7 @@ async function carregarSheets(filtroMes=null) {
     { nome:'📝 CHEQUES EMITIDOS', tipo:'saida',   colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','VENCTO','  ▶'] },
     { nome:'🗒 NOTAS SEM BOLETOS',tipo:'saida',   colVal:2, colDesc:0, colData:0, skipPrefix:['TOTAL','EMPRESA','🗒'] },
     { nome:'⛽ ABASTECIMENTO',    tipo:'saida',   colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','DATA','  ▶'] },
-    { nome:'👷 VALES FUNC.',      tipo:'saida',   colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','DATA','  ▶','Salários'] },
+    { nome:'👷 VALES GERAL',      tipo:'saida',   colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','DATA','  ▶','Salários'] },
     { nome:'🧾 CHEQUES CLIENTES', tipo:'cheque',  colVal:1, colDesc:3, colData:0, skipPrefix:['DATA','🧾','FINALIDADE'] },
   ];
 
