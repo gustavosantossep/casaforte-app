@@ -567,7 +567,7 @@ const ABA_SHEET = {
   despesas:     '📤 DESPESAS EMPRESA',
   cheques_emit: '📝 CHEQUES EMITIDOS',
   cheques_cli:  '🧾 CHEQUES CLIENTES',
-  notas:        '🗒 NOTAS SEM BOLETOS',
+  notas:        '🗒 NOTAS SEM BOLETO',
   comissoes:    '📤 DESPESAS EMPRESA',
   abastecimento:'⛽ ABASTECIMENTO',
   vales:        '👷 VALES GERAL',
@@ -981,6 +981,24 @@ async function sheetsAppend(sheet, values) {
   }
 
   // 2. Inserir linha ANTES do SUBTOTAL usando batchUpdate
+  // Para VENDAS: verificar se o subtotal é do mês atual
+  // Se não for (ex: lançamento de maio mas último subtotal é de abril),
+  // fazer append no final para não bagunçar meses anteriores
+  const hoje2 = new Date();
+  const mesAtualStr = String(hoje2.getMonth()+1).padStart(2,'0')+'/'+hoje2.getFullYear();
+  const anoAtualStr = String(hoje2.getFullYear());
+  // Verificar se existem dados APÓS o último subtotal (indicando mês novo sem subtotal)
+  const temDadosAposSubtotal = ultimaLinhaComDados > subtotalRow;
+  if (temDadosAposSubtotal) {
+    // Há dados depois do subtotal — o mês atual está aberto, append no final
+    const r = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(sheet+'!A:F')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+        body:JSON.stringify({values})}
+    );
+    if (!r.ok) throw new Error('Append erro');
+    return r.json();
+  }
   const sheetId = await getSheetId(sheet);
   const insertRowIndex = subtotalRow; // índice 0-based onde inserir
 
@@ -1056,7 +1074,7 @@ async function carregarSheets(filtroMes=null) {
     { nome:'💰 VENDAS',           tipo:'entrada', colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','DATA','  ▶','CATEGORIA'] },
     { nome:'📤 DESPESAS EMPRESA', tipo:'saida',   colVal:1, colDesc:2, colData:0, colCat:3, skipPrefix:['SUBTOTAL','DATA','  ▶'] },
     { nome:'📝 CHEQUES EMITIDOS', tipo:'saida',   colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','VENCTO','  ▶'] },
-    { nome:'🗒 NOTAS SEM BOLETOS',tipo:'saida',   colVal:2, colDesc:0, colData:0, skipPrefix:['TOTAL','EMPRESA','🗒'] },
+    { nome:'🗒 NOTAS SEM BOLETO',tipo:'saida',   colVal:3, colDesc:0, colData:2, skipPrefix:['TOTAL','EMPRESA','🗒','EMPRESA / FORN'] },
     { nome:'⛽ ABASTECIMENTO',    tipo:'saida',   colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','DATA','  ▶'] },
     { nome:'👷 VALES GERAL',      tipo:'saida',   colVal:1, colDesc:2, colData:0, skipPrefix:['SUBTOTAL','DATA','  ▶','Salários'] },
     { nome:'🧾 CHEQUES CLIENTES', tipo:'cheque',  colVal:1, colDesc:3, colData:0, skipPrefix:['DATA','🧾','FINALIDADE'] },
@@ -1101,7 +1119,7 @@ async function carregarSheets(filtroMes=null) {
         let desc = String(row[cfg.colDesc] || '').trim();
         if (!desc || desc === 'None') {
           if (cfg.nome === '⛽ ABASTECIMENTO') desc = 'Abastec. '+(row[2]||'');
-          else if (cfg.nome === '👷 VALES FUNC.') desc = (row[2]||'—')+' — '+(row[3]||'');
+          else if (cfg.nome === '👷 VALES GERAL') desc = (row[2]||'—')+' — '+(row[3]||'');
           else if (cfg.nome === '📝 CHEQUES EMITIDOS') desc = row[2]||'Cheque';
           else desc = cfg.nome;
         }
@@ -1451,9 +1469,9 @@ function renderForm(abaId, cor) {
       break;
 
     case 'notas':
-      html=`<div class="fg"><label class="lbl">Empresa / Fornecedor</label><input type="text" id="f-empresa" placeholder="Ex: Pinocal, Elétrica Danúbio..."></div>
-        ${campo('Número da NF','f-data','Ex: 442789')}
-        <div class="fg"><label class="lbl">Valor (R$)</label><input type="number" id="f-val" placeholder="0,00" class="valor-input" inputmode="decimal"></div>`;
+      html=`${baseDataValor}
+        ${campo('Empresa / Fornecedor','f-empresa','Ex: Pinocal, Elétrica Danúbio...')}
+        ${campo('Número da NF / Pedido','f-nf','Ex: 442789, P110782')}`;
       break;
 
     case 'comissoes':
@@ -1611,21 +1629,23 @@ async function salvar() {
       if(!g('f-desc')){msgValidacao='Informe o favorecido/cheque.';validacaoOk=false;}
       // Estrutura real: VENCTO, VALOR, FAVORECIDO/Nº CHEQUE, STATUS, MÊS
       const mesEmit = document.getElementById('f-mes')?.value||g('f-mes')||hoje().slice(3);
-      linha=[data, val, g('f-desc')||'', sel.status||'PENDENTE', mesEmit];
+      linha=[data, val, g('f-desc')||'', sel.status||'⚠ PENDENTE', mesEmit];
       break;
     case 'cheques_cli':
       if(!g('f-dono')){msgValidacao='Informe o nome do cliente.';validacaoOk=false;}
       const finCheq = sel.fin||'CUSTODIA SIMPLES';
       const tercCheq = g('f-terc')||'';
       const finalidadeFinal = tercCheq ? finCheq+' / '+tercCheq : finCheq;
-      linha=[data, val, g('f-num')||'', g('f-dono')||'', tercCheq, finalidadeFinal];
+      // Planilha: A=DATA, B=VALOR, C=Nº CHEQUE, D=DONO, E=AGÊNCIA, F=TERCEIRO, G=FINALIDADE, H=STATUS
+      const stCheq = (finCheq === 'CUSTODIA SIMPLES' || finCheq === 'CUSTODIA ADIANTADA') ? '🕐 EM CARTEIRA' : '✔ COMPENSADO';
+      linha=[data, val, g('f-num')||'', g('f-dono')||'', '', tercCheq, finalidadeFinal, stCheq];
       tipo='e';
       break;
     case 'notas':
       if(!g('f-empresa')){msgValidacao='Informe a empresa/fornecedor.';validacaoOk=false;}
       if(!g('f-nf')){msgValidacao='Informe o número da NF.';validacaoOk=false;}
-      // Estrutura real da planilha: col A=Empresa, col B=NF, col C=Valor
-      linha=[g('f-empresa')||'', g('f-nf')||'', val];
+      // Nova estrutura: A=EMPRESA, B=NF, C=DATA ENTRADA, D=VALOR, E=DATA BOLETO, F=STATUS
+      linha=[g('f-empresa')||'', g('f-nf')||'', data, val, '', '⏳ AGUARDANDO'];
       break;
     case 'comissoes':
       if(!sel.func){msgValidacao='Selecione o funcionário.';validacaoOk=false;}
@@ -1643,7 +1663,8 @@ async function salvar() {
       if(!sel.func){msgValidacao='Selecione o funcionário.';validacaoOk=false;}
       const nomeFuncionario = sel.func||'—';
       const descVale = (sel.tipo_v||'Vale')+' — '+(sel.forma||'Dinheiro');
-      linha=[data, val, nomeFuncionario, descVale, sel.status||'PAGO'];
+      const stVale = sel.status_v||'✔ PAGO';
+      linha=[data, val, nomeFuncionario, descVale, stVale];
       break;
     // ── PARTICULAR ──────────────────────────────────────────────────────────
     // Estrutura planilha: DATA, VALOR, CATEGORIA, FORMA_PGTO, DESCRIÇÃO, MÊS
