@@ -923,12 +923,12 @@ async function sheetsGet(range) {
   if (!r.ok) throw new Error('Sheets erro');
   return r.json();
 }
-async function sheetsGetAll(sheet) {
+async function sheetsGetAll(sheet, maxCol='J') {
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(sheet+'!A:F')}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(sheet+'!A:'+maxCol)}`,
     {headers:{Authorization:`Bearer ${token}`}}
   );
-  if (!r.ok) throw new Error('Get erro');
+  if (!r.ok) throw new Error('Get erro '+r.status);
   return r.json();
 }
 
@@ -953,6 +953,11 @@ async function sheetsUpdateCell(range, values) {
 }
 
 async function sheetsAppend(sheet, values) {
+  // Determinar range correto baseado no número de colunas a salvar
+  const numCols = values[0] ? values[0].length : 6;
+  const colFinal = 'ABCDEFGHIJ'[numCols-1] || 'F';
+  const rangeAppend = sheet+'!A:'+colFinal;
+
   // 1. Ler aba completa para encontrar linha do SUBTOTAL
   const data = await sheetsGetAll(sheet);
   const rows = data.values || [];
@@ -972,11 +977,11 @@ async function sheetsAppend(sheet, values) {
   if (subtotalRow === -1) {
     // Sem subtotal — append normal no final
     const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(sheet+'!A:F')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(rangeAppend)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
         body:JSON.stringify({values})}
     );
-    if (!r.ok) throw new Error('Append erro');
+    if (!r.ok) throw new Error('Append erro '+r.status);
     return r.json();
   }
 
@@ -992,11 +997,11 @@ async function sheetsAppend(sheet, values) {
   if (temDadosAposSubtotal) {
     // Há dados depois do subtotal — o mês atual está aberto, append no final
     const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(sheet+'!A:F')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(rangeAppend)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
         body:JSON.stringify({values})}
     );
-    if (!r.ok) throw new Error('Append erro');
+    if (!r.ok) throw new Error('Append erro '+r.status);
     return r.json();
   }
   const sheetId = await getSheetId(sheet);
@@ -1017,7 +1022,7 @@ async function sheetsAppend(sheet, values) {
 
   // 3. Gravar dados na nova linha inserida
   const rowNum = insertRowIndex + 1; // 1-based para a API
-  await sheetsUpdateCell(`${sheet}!A${rowNum}:F${rowNum}`, [values[0]]);
+  await sheetsUpdateCell(`${sheet}!A${rowNum}:${colFinal}${rowNum}`, [values[0]]);
 
   // 4. Atualizar fórmula do SUBTOTAL para incluir nova linha
   const subtotalRowNum = insertRowIndex + 2; // +1 por ser 1-based, +1 pois inserimos uma linha
@@ -1439,7 +1444,7 @@ function renderForm(abaId, cor) {
         ${campo('Favorecido / Nº Cheque','f-desc','Ex: Alvorada - 2663')}
         <div class="fg"><label class="lbl">Mês Referência</label><input type="text" id="f-mes" value="${hoje().slice(3)}" placeholder="MM/AAAA"></div>
         <div class="fg"><label class="lbl">Status</label>
-          <div class="chips-wrap">${mkChips(['PENDENTE','COMPENSADO'],'status',cor,'PENDENTE')}</div></div>`;
+          <div class="chips-wrap">${mkChips(['⚠ PENDENTE','✔ COMPENSADO'],'status',cor,'⚠ PENDENTE')}</div></div>`;
       break;
 
     case 'cheques_cli':
@@ -1471,7 +1476,8 @@ function renderForm(abaId, cor) {
     case 'notas':
       html=`${baseDataValor}
         ${campo('Empresa / Fornecedor','f-empresa','Ex: Pinocal, Elétrica Danúbio...')}
-        ${campo('Número da NF / Pedido','f-nf','Ex: 442789, P110782')}`;
+        ${campo('Número da NF / Pedido','f-nf','Ex: 442789, P110782')}
+        ${campo('Observação (opcional)','f-obs','Ex: boleto chegará em 30 dias')}`;
       break;
 
     case 'comissoes':
@@ -1629,7 +1635,8 @@ async function salvar() {
       if(!g('f-desc')){msgValidacao='Informe o favorecido/cheque.';validacaoOk=false;}
       // Estrutura real: VENCTO, VALOR, FAVORECIDO/Nº CHEQUE, STATUS, MÊS
       const mesEmit = document.getElementById('f-mes')?.value||g('f-mes')||hoje().slice(3);
-      linha=[data, val, g('f-desc')||'', sel.status||'⚠ PENDENTE', mesEmit];
+      const statusEmit = sel.status||'⚠ PENDENTE';
+      linha=[data, val, g('f-desc')||'', statusEmit, mesEmit];
       break;
     case 'cheques_cli':
       if(!g('f-dono')){msgValidacao='Informe o nome do cliente.';validacaoOk=false;}
@@ -1663,7 +1670,7 @@ async function salvar() {
       if(!sel.func){msgValidacao='Selecione o funcionário.';validacaoOk=false;}
       const nomeFuncionario = sel.func||'—';
       const descVale = (sel.tipo_v||'Vale')+' — '+(sel.forma||'Dinheiro');
-      const stVale = sel.status_v||'✔ PAGO';
+      const stVale = sel.status||'✔ PAGO';
       linha=[data, val, nomeFuncionario, descVale, stVale];
       break;
     // ── PARTICULAR ──────────────────────────────────────────────────────────
