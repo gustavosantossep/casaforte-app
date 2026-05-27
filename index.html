@@ -568,6 +568,8 @@ select option{background:var(--navy2);}
 </div>
 
 <script>
+window.onerror=function(m,s,l){console.error("ERRO:",m,"L"+l);return false;};
+
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const CLIENT_ID = '533156941517-i60i5doljd5b7hh1kn7qsgfvg9b6o98f.apps.googleusercontent.com';
 const SHEET_ID  = '1E6DV8QgE36A0rn2T8Rlor6sqD6MX5L5dGEXLTvj_Ad0';
@@ -2030,10 +2032,7 @@ function renderAdmin() {
           placeholder='Cole aqui o script gerado pelo Claude...'
           style="width:100%;height:160px;background:#F8FAFC;border:2px solid #E2E8F0;border-radius:10px;padding:12px;font-size:11px;font-family:monospace;color:#1C2B36;resize:vertical;box-sizing:border-box;line-height:1.5;-webkit-user-select:text;user-select:text;"
           oninput="adminValidarScript()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-        <button onclick="navigator.clipboard.readText().then(t=>{document.getElementById('admin-script').value=t;adminValidarScript();}).catch(()=>alert('Cole manualmente no campo acima'))"
-          style="width:100%;margin-top:6px;background:#E8F4FD;color:#1A5276;border:1px solid #AED6F1;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;">
-          📋 Colar da área de transferência
-        </button>
+
         
         <!-- Validação -->
         <div id="admin-validacao" style="margin-top:8px;font-size:11px;min-height:20px;"></div>
