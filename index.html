@@ -494,6 +494,11 @@ select option{background:var(--navy2);}
   </div>
 </div>
 
+<!-- ██ LOG ██ -->
+<div class="screen" id="s-log">
+  <div id="log-content"></div>
+</div>
+
 <!-- ██ RELATÓRIO ██ -->
 <div class="screen" id="s-rel">
   <div style="background:var(--navy2);padding:20px 16px 16px;border-bottom:1px solid var(--border);">
@@ -541,6 +546,7 @@ select option{background:var(--navy2);}
   <button class="nav-btn active" id="nb-home" onclick="ir('home')"><div class="nav-icon">🏠</div><div class="nav-label">Início</div></button>
   <button class="nav-btn" id="nb-lanc" onclick="ir('lanc')"><div class="nav-icon">➕</div><div class="nav-label">Lançar</div></button>
   <button class="nav-btn" id="nb-hist" onclick="ir('hist')"><div class="nav-icon">📋</div><div class="nav-label">Histórico</div></button>
+  <button class="nav-btn" id="nb-log" onclick="ir('log');renderLog()"><div class="nav-icon">🔒</div><div class="nav-label">Log</div></button>
   <button class="nav-btn" id="nb-rel" onclick="ir('rel')"><div class="nav-icon">📊</div><div class="nav-label">Relatório</div></button>
 </nav>
 
@@ -694,6 +700,7 @@ function ir(tela) {
   if (tela==='lanc') renderLanc();
   if (tela==='hist') renderHist();
   if (tela==='rel') { frapido('mes'); }
+  if (tela==='log') { renderLog(); }
 }
 
 // ── SELETOR ───────────────────────────────────────────────────────────────────
@@ -1665,54 +1672,77 @@ async function salvar() {
   const podeSheets = P.sheets && token && ABA_SHEET[abaAtiva];
   const desc=linha[2]||linha[0]||abaAtiva;
 
+  // ── PASSO 1: SALVAR LOCAL SEMPRE — independente do Sheets ──────────────
+  const logEntry = {
+    id: Date.now(),
+    ts: new Date().toISOString(),
+    perfil: P.id,
+    aba: abaAtiva,
+    data, val, tipo,
+    desc: String(desc).slice(0,60),
+    linha: JSON.parse(JSON.stringify(linha)),
+    status: 'pendente'
+  };
+  // Se vale, guardar também a linha do VALES GERAL
+  if ((abaAtiva==='vales'||abaAtiva==='vales_conf') && sel._linhaValesGeral) {
+    logEntry.linhaValesGeral = JSON.parse(JSON.stringify(sel._linhaValesGeral));
+    logEntry.funcNome = sel.func||'';
+  }
+  cfLogSalvar(logEntry);
+
+  // ── PASSO 2: TENTAR GRAVAR NO SHEETS ────────────────────────────────────
   if (podeSheets) {
     loading('Gravando na planilha...');
     try {
-      // Para vales: salvar na aba individual E no VALES GERAL
+      const FUNC_ABAS = {
+        'Dirceu':        '🔧 Dirceu',
+        'Gustavo Sutil': '📊 Gustavo Sutil',
+        'Junior':        '🛠 Junior',
+        'Daio (Odair)':  '⚙️ Daio',
+        'Daio':          '⚙️ Daio',
+        'Luiz Arruda':   '🌿 Luiz Arruda',
+        'Adão':          '🏗 Adão',
+        'Levy':          '💼 Levy',
+        'Débora':        '📋 Débora',
+        'Nezão (Adenilson)': '🔨 Nezão',
+        'Nezão':         '🔨 Nezão',
+        'João Paulo':    '📐 João Paulo',
+        'Joel':          '🪚 Joel',
+      };
       if ((abaAtiva==='vales'||abaAtiva==='vales_conf') && sel._linhaValesGeral && sel.func) {
-        const FUNC_ABAS = {
-          'Dirceu':        '🔧 Dirceu',
-          'Gustavo Sutil': '📊 Gustavo Sutil',
-          'Junior':        '🛠 Junior',
-          'Daio (Odair)':  '⚙️ Daio',
-          'Daio':          '⚙️ Daio',
-          'Luiz Arruda':   '🌿 Luiz Arruda',
-          'Adão':          '🏗 Adão',
-          'Levy':          '💼 Levy',
-          'Débora':        '📋 Débora',
-          'Nezão (Adenilson)': '🔨 Nezão',
-          'Nezão':         '🔨 Nezão',
-          'João Paulo':    '📐 João Paulo',
-          'Joel':          '🪚 Joel',
-        };
-        // Extrair nome sem ícone para buscar no mapa
         const nomeLimpo = sel.func.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+/gu, '').trim();
         const abaIndiv = FUNC_ABAS[nomeLimpo] || FUNC_ABAS[sel.func];
-        if (abaIndiv) {
-          await sheetsAppend(abaIndiv, [linha]); // aba individual
-        }
-        await sheetsAppend(ABA_SHEET[abaAtiva], [sel._linhaValesGeral]); // VALES GERAL
+        if (abaIndiv) await sheetsAppend(abaIndiv, [linha]);
+        await sheetsAppend(ABA_SHEET[abaAtiva], [sel._linhaValesGeral]);
       } else {
         await sheetsAppend(ABA_SHEET[abaAtiva], [linha]);
       }
+      // Marcar como sincronizado no log
+      cfLogMarcarSincronizado(logEntry.id);
       P.lancs.unshift({data,d:String(desc).slice(0,35),v:val,tipo});
       if(tipo==='e'){P.entradas+=val;P.saldo+=val;}else{P.saidas+=val;P.saldo-=val;}
       renderHome();
       toast('✓ Salvo na planilha!','ok');
-      // Limpar form
       ['f-val','f-desc','f-obs','f-mes','f-num','f-dono','f-terc','f-empresa','f-peso','f-comp','f-nf','f-venc','f-data'].forEach(id=>{
         const el=document.getElementById(id); if(el) el.value='';
       });
     } catch(e) {
-      toast('Erro ao gravar. Verifique conexão.','err');
+      // Sheets falhou — mas dado já está salvo localmente
+      P.lancs.unshift({data,d:String(desc).slice(0,35),v:val,tipo});
+      if(tipo==='e'){P.entradas+=val;P.saldo+=val;}else{P.saidas+=val;P.saldo-=val;}
+      renderHome();
+      toast('⚠️ Salvo localmente. Reenviar depois.','warn');
+      ['f-val','f-desc','f-obs','f-mes','f-num','f-dono','f-terc','f-empresa','f-peso','f-comp','f-nf','f-venc','f-data'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.value='';
+      });
     } finally { unload(); }
   } else {
-    // Local
+    // Sem conexão — salvo apenas local
     P.lancs.unshift({data,d:String(desc).slice(0,35),v:val,tipo});
     if(tipo==='e'){P.entradas+=val;P.saldo+=val;}else{P.saidas+=val;P.saldo-=val;}
     localStorage.setItem('cf_'+P.id, JSON.stringify(P.lancs.slice(0,200)));
     renderHome();
-    toast('✓ Lançamento salvo!','ok');
+    toast('⚠️ Salvo localmente (sem conexão).','warn');
     ['f-val','f-desc','f-obs','f-mes','f-num','f-dono','f-terc','f-empresa','f-peso','f-comp'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.value='';
     });
@@ -1807,6 +1837,139 @@ window.onload=()=>{
   s.onload=initGoogle;
   document.head.appendChild(s);
 };
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SISTEMA DE LOG LOCAL — todo lançamento é salvo no dispositivo
+// ══════════════════════════════════════════════════════════════════════════════
+const CF_LOG_KEY = 'cf_log_v1';
+
+function cfLogGetAll() {
+  try { return JSON.parse(localStorage.getItem(CF_LOG_KEY)||'[]'); }
+  catch(e) { return []; }
+}
+
+function cfLogSalvar(entry) {
+  const logs = cfLogGetAll();
+  logs.unshift(entry);
+  if (logs.length > 1000) logs.splice(1000);
+  localStorage.setItem(CF_LOG_KEY, JSON.stringify(logs));
+}
+
+function cfLogMarcarSincronizado(id) {
+  const logs = cfLogGetAll();
+  const idx = logs.findIndex(l => l.id === id);
+  if (idx > -1) {
+    logs[idx].status = 'sincronizado';
+    logs[idx].syncTs = new Date().toISOString();
+    localStorage.setItem(CF_LOG_KEY, JSON.stringify(logs));
+  }
+}
+
+function cfLogGetPendentes() {
+  return cfLogGetAll().filter(l => l.status === 'pendente');
+}
+
+function renderLog() {
+  const logs = cfLogGetAll();
+  const pendentes = logs.filter(l => l.status === 'pendente');
+  const cor = P.cor || '#E87722';
+
+  const tpl = (l) => {
+    const dt = l.ts ? new Date(l.ts).toLocaleString('pt-BR') : l.data;
+    const st = l.status === 'sincronizado'
+      ? `<span style="color:#22C55E;font-weight:700;font-size:11px;">&#10004; GRAVADO</span>`
+      : `<span style="color:#F59E0B;font-weight:700;font-size:11px;">&#9203; PENDENTE</span>`;
+    const val = typeof l.val === 'number' ? 'R$ '+l.val.toLocaleString('pt-BR',{minimumFractionDigits:2}) : '';
+    const sinal = l.tipo==='e' ? '+' : '-';
+    const corVal = l.tipo==='e' ? '#22C55E' : '#E87722';
+    return `<div style="padding:10px 14px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:700;color:#1C2B36;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l.desc||l.aba}</div>
+        <div style="font-size:11px;color:#8899AA;margin-top:2px;">${dt} &middot; ${l.aba||''} &middot; ${l.perfil||''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:13px;font-weight:700;color:${corVal}">${sinal}${val}</div>
+        <div style="margin-top:2px;">${st}</div>
+      </div>
+    </div>`;
+  };
+
+  const alertaPendente = pendentes.length > 0
+    ? `<div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:12px 16px;">
+        <div style="font-weight:700;color:#92400E;font-size:13px;">&#9888; ${pendentes.length} lancamento(s) nao sincronizado(s)</div>
+        <div style="font-size:12px;color:#92400E;margin-top:4px;">Salvos no dispositivo. Clique para enviar a planilha.</div>
+        <button onclick="cfReenviarPendentes()" style="margin-top:8px;background:#F59E0B;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;width:100%;">
+          Reenviar para a Planilha
+        </button>
+      </div>`
+    : `<div style="background:#D1FAE5;border-left:4px solid #22C55E;padding:12px 16px;">
+        <div style="font-weight:700;color:#065F46;font-size:13px;">&#10003; Tudo sincronizado com a planilha</div>
+      </div>`;
+
+  document.getElementById('app').innerHTML = `
+    <div style="max-width:480px;margin:0 auto;">
+      <div style="background:${cor};padding:16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;">
+        <button onclick="renderHome()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;">&#8592;</button>
+        <div>
+          <div style="color:#fff;font-weight:700;font-size:16px;">Log de Lancamentos</div>
+          <div style="color:rgba(255,255,255,0.8);font-size:12px;">${logs.length} registros &middot; ${pendentes.length} pendente(s)</div>
+        </div>
+      </div>
+      ${alertaPendente}
+      <div style="background:#fff;">
+        ${logs.length===0
+          ? '<div style="padding:40px;text-align:center;color:#8899AA;font-size:13px;">Nenhum lancamento registrado ainda.</div>'
+          : logs.map(tpl).join('')}
+      </div>
+      <div style="padding:16px;text-align:center;">
+        <button onclick="if(confirm('Limpar registros ja sincronizados?')){const p=cfLogGetPendentes();localStorage.setItem(CF_LOG_KEY,JSON.stringify(p));renderLog();}"
+          style="background:none;border:1px solid #ddd;color:#8899AA;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;">
+          Limpar registros sincronizados
+        </button>
+      </div>
+    </div>`;
+}
+
+async function cfReenviarPendentes() {
+  const pendentes = cfLogGetPendentes();
+  if (!pendentes.length) { toast('Nenhum pendente!','ok'); return; }
+  if (!token) { toast('Faca login primeiro.','warn'); return; }
+  loading('Reenviando pendentes...');
+  let ok=0, erros=0;
+  const FUNC_ABAS = {
+    'Dirceu':'🔧 Dirceu','Gustavo Sutil':'📊 Gustavo Sutil',
+    'Junior':'🛠 Junior','Daio (Odair)':'⚙️ Daio','Daio':'⚙️ Daio',
+    'Luiz Arruda':'🌿 Luiz Arruda','Adao':'🏗 Adão','Adão':'🏗 Adão',
+    'Levy':'💼 Levy','Debora':'📋 Débora','Débora':'📋 Débora',
+    'Nezao':'🔨 Nezão','Nezão':'🔨 Nezão','Nezão (Adenilson)':'🔨 Nezão',
+    'Joao Paulo':'📐 João Paulo','João Paulo':'📐 João Paulo','Joel':'🪚 Joel',
+  };
+  for (const entry of pendentes) {
+    try {
+      if (entry.perfil==='particular') window._tmpSheetId='1J38AVVEBOG7wqStky_U2_M-OfsSPTIlVHqwIRzVcjuQ';
+      else if (entry.perfil==='confina') window._tmpSheetId='1qPKxRdDyqY531-slZG_4BwcnAVLjCZNK4c_6kEtmxhI';
+      else window._tmpSheetId='1E6DV8QgE36A0rn2T8Rlor6sqD6MX5L5dGEXLTvj_Ad0';
+      const aba=ABA_SHEET[entry.aba];
+      if (!aba){ erros++; continue; }
+      if ((entry.aba==='vales'||entry.aba==='vales_conf') && entry.linhaValesGeral && entry.funcNome) {
+        const nomeLimpo=entry.funcNome.replace(/^[\s\S]{0,3}/,'').trim();
+        const abaIndiv=FUNC_ABAS[entry.funcNome]||FUNC_ABAS[nomeLimpo];
+        if (abaIndiv) await sheetsAppend(abaIndiv,[entry.linha]);
+        await sheetsAppend(aba,[entry.linhaValesGeral]);
+      } else {
+        await sheetsAppend(aba,[entry.linha]);
+      }
+      cfLogMarcarSincronizado(entry.id);
+      ok++;
+    } catch(e){ erros++; }
+    finally { window._tmpSheetId=null; }
+  }
+  unload();
+  toast(erros===0?`${ok} lançamento(s) enviado(s)!`:`${ok} enviados, ${erros} falhou`,'ok');
+  renderLog();
+}
+
+
 </script>
 </body>
 </html>
