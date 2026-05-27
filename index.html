@@ -248,7 +248,8 @@ select option{background:var(--navy2);}
 
 /* HEADER GRADIENT */
 .hdr{
-  padding:60px 20px 28px;
+  padding:max(env(safe-area-inset-top,60px),60px) 20px 28px;
+  padding-top:max(env(safe-area-inset-top),60px);
   background:linear-gradient(160deg,var(--navy) 0%,var(--navy3) 100%);
   position:relative;overflow:hidden;flex-shrink:0;
 }
@@ -472,7 +473,7 @@ select option{background:var(--navy2);}
 
 <!-- ██ LANÇAR ██ -->
 <div class="screen" id="s-lanc" style="padding-bottom:120px;">
-  <div style="background:var(--navy2);padding:20px 16px 16px;border-bottom:1px solid var(--border);">
+  <div style="background:var(--navy2);padding:max(env(safe-area-inset-top),20px) 16px 16px;border-bottom:1px solid var(--border);">
     <div id="l-perfil" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;"></div>
     <div style="font-size:20px;font-weight:800;">Novo Lançamento</div>
   </div>
@@ -482,7 +483,7 @@ select option{background:var(--navy2);}
 
 <!-- ██ HISTÓRICO ██ -->
 <div class="screen" id="s-hist">
-  <div style="background:var(--navy2);padding:20px 16px 16px;border-bottom:1px solid var(--border);">
+  <div style="background:var(--navy2);padding:max(env(safe-area-inset-top),20px) 16px 16px;border-bottom:1px solid var(--border);">
     <div id="hist-perfil" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;"></div>
     <div style="font-size:20px;font-weight:800;">Histórico</div>
   </div>
@@ -502,7 +503,7 @@ select option{background:var(--navy2);}
 
 <!-- ██ RELATÓRIO ██ -->
 <div class="screen" id="s-rel">
-  <div style="background:var(--navy2);padding:20px 16px 16px;border-bottom:1px solid var(--border);">
+  <div style="background:var(--navy2);padding:max(env(safe-area-inset-top),20px) 16px 16px;border-bottom:1px solid var(--border);">
     <div id="rel-perfil" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;"></div>
     <div style="font-size:20px;font-weight:800;">Relatório</div>
   </div>
