@@ -2027,9 +2027,13 @@ function renderAdmin() {
           Script de Comandos (JSON):
         </label>
         <textarea id="admin-script" 
-          placeholder='Cole aqui o script gerado pelo Claude...&#10;&#10;Exemplo:&#10;[{"op":"write","sheet":"💰 VENDAS","row":5,"col":1,"value":"27/05/2026"}]'
-          style="width:100%;height:200px;background:#F8FAFC;border:2px solid #E2E8F0;border-radius:10px;padding:12px;font-size:11px;font-family:monospace;color:#1C2B36;resize:vertical;box-sizing:border-box;line-height:1.5;"
-          oninput="adminValidarScript()"></textarea>
+          placeholder='Cole aqui o script gerado pelo Claude...'
+          style="width:100%;height:160px;background:#F8FAFC;border:2px solid #E2E8F0;border-radius:10px;padding:12px;font-size:11px;font-family:monospace;color:#1C2B36;resize:vertical;box-sizing:border-box;line-height:1.5;-webkit-user-select:text;user-select:text;"
+          oninput="adminValidarScript()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+        <button onclick="navigator.clipboard.readText().then(t=>{document.getElementById('admin-script').value=t;adminValidarScript();}).catch(()=>alert('Cole manualmente no campo acima'))"
+          style="width:100%;margin-top:6px;background:#E8F4FD;color:#1A5276;border:1px solid #AED6F1;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;">
+          📋 Colar da área de transferência
+        </button>
         
         <!-- Validação -->
         <div id="admin-validacao" style="margin-top:8px;font-size:11px;min-height:20px;"></div>
@@ -2049,6 +2053,51 @@ function renderAdmin() {
 
       <!-- Resultado -->
       <div id="admin-resultado" style="padding:0 16px 16px;"></div>
+
+      <!-- Scripts prontos -->
+      <div style="padding:16px;background:#F8FAFC;margin:0 16px;border-radius:12px;border:1px solid #E2E8F0;">
+        <div style="font-size:11px;font-weight:700;color:#1C2B36;margin-bottom:10px;">&#9889; Scripts prontos — toque para carregar:</div>
+        ${[
+          ['Corrigir venda R$1.700 (linha 19→final)', JSON.stringify([
+            {"op":"deleteRow","sheet":"💰 VENDAS","row":19},
+            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
+            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
+            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
+            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
+            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
+            {"op":"writeRow","sheet":"💰 VENDAS","row":821,"values":["22/05/2026",1700,"Maio/2026",""]}
+          ])],
+          ['Inserir 10 linhas em DESPESAS', JSON.stringify([
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
+            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404}
+          ])],
+          ['Inserir 10 linhas em VALES GERAL', JSON.stringify([
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
+            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38}
+          ])],
+        ].map(([lbl,script]) => `
+          <button onclick="document.getElementById('admin-script').value='${script.replace(/'/g,"\'").replace(/
+/g,'')}';adminValidarScript();"
+            style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">
+            &#9654; ${lbl}
+          </button>`).join('')}
+      </div>
 
       <!-- Exemplos de operações -->
       <div style="padding:16px;background:#F8FAFC;margin:0 16px 16px;border-radius:12px;border:1px solid #E2E8F0;">
