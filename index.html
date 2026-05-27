@@ -953,98 +953,28 @@ async function sheetsUpdateCell(range, values) {
 }
 
 async function sheetsAppend(sheet, values) {
-  // Determinar range correto baseado no número de colunas a salvar
+  // Determinar range correto pelo número de colunas
   const numCols = values[0] ? values[0].length : 6;
-  const colFinal = 'ABCDEFGHIJ'[numCols-1] || 'F';
-  const rangeAppend = sheet+'!A:'+colFinal;
+  const colFinal = 'ABCDEFGHIJ'[numCols - 1] || 'J';
+  const rangeAppend = `${sheet}!A:${colFinal}`;
 
-  // 1. Ler aba completa para encontrar linha do SUBTOTAL
-  const data = await sheetsGetAll(sheet);
-  const rows = data.values || [];
-  
-  let subtotalRow = -1;  // índice 0-based
-  let ultimaLinhaComDados = -1;
-  
-  rows.forEach((row, i) => {
-    const r0 = String(row[0] || '').toUpperCase();
-    if (r0.includes('SUBTOTAL') || r0.includes('TOTAL PENDENTE')) {
-      subtotalRow = i;
-    } else if (row.some(c => c !== null && c !== undefined && c !== '')) {
-      ultimaLinhaComDados = i;
+  // SEMPRE append no final — simples, direto, sem bugs
+  const r = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(rangeAppend)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values })
     }
-  });
-
-  if (subtotalRow === -1) {
-    // Sem subtotal — append normal no final
-    const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(rangeAppend)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-      {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-        body:JSON.stringify({values})}
-    );
-    if (!r.ok) throw new Error('Append erro '+r.status);
-    return r.json();
+  );
+  if (!r.ok) {
+    const err = await r.text();
+    throw new Error(`Append erro ${r.status}: ${err.slice(0,100)}`);
   }
-
-  // 2. Inserir linha ANTES do SUBTOTAL usando batchUpdate
-  // Para VENDAS: verificar se o subtotal é do mês atual
-  // Se não for (ex: lançamento de maio mas último subtotal é de abril),
-  // fazer append no final para não bagunçar meses anteriores
-  const hoje2 = new Date();
-  const mesAtualStr = String(hoje2.getMonth()+1).padStart(2,'0')+'/'+hoje2.getFullYear();
-  const anoAtualStr = String(hoje2.getFullYear());
-  // Verificar se existem dados APÓS o último subtotal (indicando mês novo sem subtotal)
-  const temDadosAposSubtotal = ultimaLinhaComDados > subtotalRow;
-  if (temDadosAposSubtotal) {
-    // Há dados depois do subtotal — o mês atual está aberto, append no final
-    const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(rangeAppend)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-      {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-        body:JSON.stringify({values})}
-    );
-    if (!r.ok) throw new Error('Append erro '+r.status);
-    return r.json();
-  }
-  const sheetId = await getSheetId(sheet);
-  const insertRowIndex = subtotalRow; // índice 0-based onde inserir
-
-  // Inserir linha vazia antes do subtotal
-  await sheetsBatchUpdate([{
-    insertDimension: {
-      range: {
-        sheetId: sheetId,
-        dimension: 'ROWS',
-        startIndex: insertRowIndex,
-        endIndex: insertRowIndex + 1
-      },
-      inheritFromBefore: true
-    }
-  }]);
-
-  // 3. Gravar dados na nova linha inserida
-  const rowNum = insertRowIndex + 1; // 1-based para a API
-  await sheetsUpdateCell(`${sheet}!A${rowNum}:${colFinal}${rowNum}`, [values[0]]);
-
-  // 4. Atualizar fórmula do SUBTOTAL para incluir nova linha
-  const subtotalRowNum = insertRowIndex + 2; // +1 por ser 1-based, +1 pois inserimos uma linha
-  const subtotalCell = rows[subtotalRow];
-  const oldFormula = String(subtotalCell[1] || '');
-  
-  if (oldFormula.startsWith('=SUM(')) {
-    // Extrair range atual e expandir para incluir nova linha
-    const match = oldFormula.match(/=SUM\(B(\d+):B(\d+)\)/);
-    if (match) {
-      const start = parseInt(match[1]);
-      const end = parseInt(match[2]) + 1; // expandir +1
-      const newFormula = `=SUM(B${start}:B${end})`;
-      await sheetsUpdateCell(`${sheet}!B${subtotalRowNum}`, [[newFormula]]);
-    }
-  }
-
-  return { status: 'ok', insertedAt: rowNum };
+  return r.json();
 }
 
-// Cache de IDs de abas
-const _sheetIds = {};
+
 async function getSheetId(sheetName) {
   if (_sheetIds[sheetName]) return _sheetIds[sheetName];
   const r = await fetch(
