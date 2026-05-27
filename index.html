@@ -501,6 +501,11 @@ select option{background:var(--navy2);}
   </div>
 </div>
 
+<!-- ██ ADMIN ██ -->
+<div class="screen" id="s-admin">
+  <div id="admin-content"></div>
+</div>
+
 <!-- ██ LOG ██ -->
 <div class="screen" id="s-log">
   <div id="log-content"></div>
@@ -554,6 +559,7 @@ select option{background:var(--navy2);}
   <button class="nav-btn" id="nb-lanc" onclick="ir('lanc')"><div class="nav-icon">➕</div><div class="nav-label">Lançar</div></button>
   <button class="nav-btn" id="nb-hist" onclick="ir('hist')"><div class="nav-icon">📋</div><div class="nav-label">Histórico</div></button>
   <button class="nav-btn" id="nb-log" onclick="ir('log');renderLog()"><div class="nav-icon">🔒</div><div class="nav-label">Log</div></button>
+  <button class="nav-btn" id="nb-admin" onclick="ir('admin');renderAdmin()" style="opacity:0.4;"><div class="nav-icon" style="font-size:13px;">⚙️</div><div class="nav-label" style="font-size:8px;">Admin</div></button>
   <button class="nav-btn" id="nb-rel" onclick="ir('rel')"><div class="nav-icon">📊</div><div class="nav-label">Relatório</div></button>
 </nav>
 
@@ -708,6 +714,7 @@ function ir(tela) {
   if (tela==='hist') renderHist();
   if (tela==='rel') { frapido('mes'); }
   if (tela==='log') { renderLog(); }
+  if (tela==='admin') { renderAdmin(); }
 }
 
 // ── SELETOR ───────────────────────────────────────────────────────────────────
@@ -1971,6 +1978,245 @@ async function cfReenviarPendentes() {
   unload();
   toast(erros===0?`${ok} lançamento(s) enviado(s)!`:`${ok} enviados, ${erros} falhou`,'ok');
   renderLog();
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ABA ADMIN — Execução remota de comandos na planilha
+// Gustavo cola o script gerado pelo Claude e aperta Executar
+// ══════════════════════════════════════════════════════════════════════════════
+
+function renderAdmin() {
+  const cor = P ? (P.cor || '#E87722') : '#E87722';
+  document.getElementById('admin-content').innerHTML = `
+    <div style="max-width:480px;margin:0 auto;padding-bottom:80px;">
+      
+      <!-- Header -->
+      <div style="background:#1C2B36;padding-top:calc(var(--sat) + 14px);padding-left:16px;padding-right:16px;padding-bottom:14px;">
+        <div style="color:#E87722;font-weight:700;font-size:16px;">&#9881; Painel Admin</div>
+        <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px;">Execute comandos na planilha diretamente</div>
+      </div>
+
+      <!-- Info -->
+      <div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:12px 16px;font-size:12px;color:#92400E;">
+        <b>Como usar:</b> Cole aqui o script gerado pelo Claude e toque em Executar. 
+        Os comandos serão executados diretamente na planilha do Google Sheets.
+      </div>
+
+      <!-- Status da conexão -->
+      <div style="padding:12px 16px;background:#fff;border-bottom:1px solid #f0f0f0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;color:#666;">Planilha conectada:</span>
+          <span style="font-size:11px;font-weight:700;color:#1C2B36;">${P ? P.nome : '—'}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+          <span style="font-size:12px;color:#666;">Token Google:</span>
+          <span style="font-size:11px;font-weight:700;color:${token ? '#22C55E' : '#EF4444'}">${token ? '&#10004; Conectado' : '&#10006; Desconectado'}</span>
+        </div>
+      </div>
+
+      <!-- Área de script -->
+      <div style="padding:16px;background:#fff;">
+        <label style="font-size:12px;font-weight:700;color:#1C2B36;display:block;margin-bottom:8px;">
+          Script de Comandos (JSON):
+        </label>
+        <textarea id="admin-script" 
+          placeholder='Cole aqui o script gerado pelo Claude...&#10;&#10;Exemplo:&#10;[{"op":"write","sheet":"💰 VENDAS","row":5,"col":1,"value":"27/05/2026"}]'
+          style="width:100%;height:200px;background:#F8FAFC;border:2px solid #E2E8F0;border-radius:10px;padding:12px;font-size:11px;font-family:monospace;color:#1C2B36;resize:vertical;box-sizing:border-box;line-height:1.5;"
+          oninput="adminValidarScript()"></textarea>
+        
+        <!-- Validação -->
+        <div id="admin-validacao" style="margin-top:8px;font-size:11px;min-height:20px;"></div>
+        
+        <!-- Botão executar -->
+        <button onclick="adminExecutar()" 
+          style="width:100%;margin-top:12px;background:#1C2B36;color:#E87722;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:0.5px;">
+          &#9654; EXECUTAR NA PLANILHA
+        </button>
+        
+        <!-- Botão limpar -->
+        <button onclick="document.getElementById('admin-script').value='';document.getElementById('admin-validacao').innerHTML='';document.getElementById('admin-resultado').innerHTML='';"
+          style="width:100%;margin-top:8px;background:none;border:1px solid #ddd;border-radius:12px;padding:10px;font-size:12px;color:#8899AA;cursor:pointer;">
+          Limpar
+        </button>
+      </div>
+
+      <!-- Resultado -->
+      <div id="admin-resultado" style="padding:0 16px 16px;"></div>
+
+      <!-- Exemplos de operações -->
+      <div style="padding:16px;background:#F8FAFC;margin:0 16px 16px;border-radius:12px;border:1px solid #E2E8F0;">
+        <div style="font-size:11px;font-weight:700;color:#1C2B36;margin-bottom:10px;">&#128216; Operações disponíveis:</div>
+        ${[
+          ['write',    'Escrever valor em célula específica'],
+          ['writeRow', 'Escrever linha inteira de dados'],
+          ['deleteRow','Deletar uma linha'],
+          ['insertRow','Inserir linha em posição específica'],
+          ['clearRow', 'Limpar conteúdo de uma linha'],
+          ['batchWrite','Escrever múltiplos valores de uma vez'],
+        ].map(([op,desc]) => `
+          <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;">
+            <code style="background:#1C2B36;color:#E87722;padding:2px 6px;border-radius:4px;font-size:10px;flex-shrink:0;">${op}</code>
+            <span style="font-size:11px;color:#666;">${desc}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function adminValidarScript() {
+  const txt = document.getElementById('admin-script').value.trim();
+  const div = document.getElementById('admin-validacao');
+  if (!txt) { div.innerHTML = ''; return; }
+  try {
+    const cmds = JSON.parse(txt);
+    if (!Array.isArray(cmds)) throw new Error('Deve ser um array []');
+    div.innerHTML = `<span style="color:#22C55E;font-weight:700;">&#10004; JSON válido — ${cmds.length} comando(s)</span>`;
+  } catch(e) {
+    div.innerHTML = `<span style="color:#EF4444;font-weight:700;">&#10006; JSON inválido: ${e.message}</span>`;
+  }
+}
+
+async function adminExecutar() {
+  const txt = document.getElementById('admin-script').value.trim();
+  const divRes = document.getElementById('admin-resultado');
+  
+  if (!txt) { toast('Cole um script primeiro.', 'warn'); return; }
+  if (!token) { toast('Faça login no Google primeiro.', 'warn'); return; }
+  
+  let cmds;
+  try {
+    cmds = JSON.parse(txt);
+    if (!Array.isArray(cmds)) throw new Error('Deve ser array');
+  } catch(e) {
+    toast('JSON inválido: ' + e.message, 'err'); return;
+  }
+
+  loading(`Executando ${cmds.length} comando(s)...`);
+  const resultados = [];
+  let ok = 0, erros = 0;
+
+  for (const cmd of cmds) {
+    try {
+      const sheetId = cmd.sheetId || getActiveSheetId();
+      
+      if (cmd.op === 'write') {
+        // Escrever valor em célula: {op:"write", sheet:"ABA", row:5, col:1, value:"texto"}
+        const range = `${cmd.sheet}!${colLetra(cmd.col)}${cmd.row}`;
+        await sheetsUpdateCell(range, [[cmd.value ?? '']]);
+        resultados.push(`✅ write → ${cmd.sheet} L${cmd.row}C${cmd.col}`);
+        ok++;
+
+      } else if (cmd.op === 'writeRow') {
+        // Escrever linha: {op:"writeRow", sheet:"ABA", row:5, values:["a","b","c"]}
+        const range = `${cmd.sheet}!A${cmd.row}:${colLetra(cmd.values.length)}${cmd.row}`;
+        await sheetsUpdateCell(range, [cmd.values]);
+        resultados.push(`✅ writeRow → ${cmd.sheet} L${cmd.row} (${cmd.values.length} cols)`);
+        ok++;
+
+      } else if (cmd.op === 'deleteRow') {
+        // Deletar linha: {op:"deleteRow", sheet:"ABA", row:19}
+        const sid = await getSheetId(cmd.sheet);
+        const r = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+          { method:'POST',
+            headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+            body: JSON.stringify({ requests:[{
+              deleteDimension:{
+                range:{sheetId:sid, dimension:'ROWS',
+                       startIndex:cmd.row-1, endIndex:cmd.row}
+              }
+            }]})
+          }
+        );
+        if (!r.ok) throw new Error(await r.text());
+        resultados.push(`✅ deleteRow → ${cmd.sheet} L${cmd.row}`);
+        ok++;
+
+      } else if (cmd.op === 'insertRow') {
+        // Inserir linha em branco: {op:"insertRow", sheet:"ABA", row:19}
+        const sid = await getSheetId(cmd.sheet);
+        const r = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+          { method:'POST',
+            headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+            body: JSON.stringify({ requests:[{
+              insertDimension:{
+                range:{sheetId:sid, dimension:'ROWS',
+                       startIndex:cmd.row-1, endIndex:cmd.row},
+                inheritFromBefore: false
+              }
+            }]})
+          }
+        );
+        if (!r.ok) throw new Error(await r.text());
+        resultados.push(`✅ insertRow → ${cmd.sheet} L${cmd.row}`);
+        ok++;
+
+      } else if (cmd.op === 'clearRow') {
+        // Limpar linha: {op:"clearRow", sheet:"ABA", row:19, ncols:4}
+        const range = `${cmd.sheet}!A${cmd.row}:${colLetra(cmd.ncols||8)}${cmd.row}`;
+        const r = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
+          { method:'POST', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'} }
+        );
+        if (!r.ok) throw new Error(await r.text());
+        resultados.push(`✅ clearRow → ${cmd.sheet} L${cmd.row}`);
+        ok++;
+
+      } else if (cmd.op === 'batchWrite') {
+        // Escrever múltiplos: {op:"batchWrite", data:[{sheet,row,col,value},...]}
+        const valueRanges = cmd.data.map(d => ({
+          range: `${d.sheet}!${colLetra(d.col)}${d.row}`,
+          values: [[d.value ?? '']]
+        }));
+        const r = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,
+          { method:'POST',
+            headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+            body: JSON.stringify({valueInputOption:'USER_ENTERED', data: valueRanges})
+          }
+        );
+        if (!r.ok) throw new Error(await r.text());
+        resultados.push(`✅ batchWrite → ${cmd.data.length} células`);
+        ok++;
+
+      } else if (cmd.op === 'append') {
+        // Append linha: {op:"append", sheet:"ABA", values:["a","b","c"]}
+        await sheetsAppend(cmd.sheet, [cmd.values]);
+        resultados.push(`✅ append → ${cmd.sheet}`);
+        ok++;
+
+      } else {
+        resultados.push(`⚠️ op desconhecida: ${cmd.op}`);
+        erros++;
+      }
+    } catch(e) {
+      resultados.push(`❌ Erro em '${cmd.op}': ${e.message.slice(0,80)}`);
+      erros++;
+    }
+  }
+
+  unload();
+
+  // Mostrar resultado
+  const bgRes = erros === 0 ? '#D1FAE5' : (ok === 0 ? '#FEE2E2' : '#FEF3C7');
+  const corRes = erros === 0 ? '#065F46' : (ok === 0 ? '#991B1B' : '#92400E');
+  divRes.innerHTML = `
+    <div style="background:${bgRes};border-radius:12px;padding:14px;border:1px solid ${corRes}33;">
+      <div style="font-weight:800;color:${corRes};font-size:13px;margin-bottom:8px;">
+        ${erros===0 ? '&#10004; Tudo executado!' : `&#9888; ${ok} ok · ${erros} erro(s)`}
+      </div>
+      ${resultados.map(r => `<div style="font-size:11px;color:${corRes};margin-bottom:4px;font-family:monospace;">${r}</div>`).join('')}
+    </div>`;
+
+  if (erros === 0) toast(`${ok} comando(s) executado(s)!`, 'ok');
+  else toast(`${ok} ok · ${erros} erro(s)`, 'warn');
+}
+
+function colLetra(n) {
+  // Converte número de coluna em letra: 1=A, 2=B, etc.
+  return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[n-1] || 'Z';
 }
 
 
