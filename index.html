@@ -2129,42 +2129,59 @@ async function adminExecutar() {
         ok++;
 
       } else if (cmd.op === 'deleteRow') {
-        // Deletar linha: {op:"deleteRow", sheet:"ABA", row:19}
-        const sid = await getSheetId(cmd.sheet, sheetId);
-        const r = await fetch(
+        // Deletar linha — busca sheetId numérico diretamente
+        const metaDR = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,
+          {headers:{Authorization:`Bearer ${token}`}}
+        );
+        if (!metaDR.ok) throw new Error('Erro metadados: ' + metaDR.status);
+        const metaD = await metaDR.json();
+        const abaD = metaD.sheets.find(s => s.properties.title === cmd.sheet);
+        if (!abaD) throw new Error('Aba "' + cmd.sheet + '" nao encontrada');
+        const numSidD = abaD.properties.sheetId;
+        const delR = await fetch(
           `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
           { method:'POST',
             headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
             body: JSON.stringify({ requests:[{
               deleteDimension:{
-                range:{sheetId:sid, dimension:'ROWS',
+                range:{sheetId:numSidD, dimension:'ROWS',
                        startIndex:cmd.row-1, endIndex:cmd.row}
               }
             }]})
           }
         );
-        if (!r.ok) throw new Error(await r.text());
-        resultados.push(`✅ deleteRow → ${cmd.sheet} L${cmd.row}`);
+        if (!delR.ok) throw new Error(await delR.text());
+        resultados.push('✅ deleteRow → ' + cmd.sheet + ' L' + cmd.row);
         ok++;
 
       } else if (cmd.op === 'insertRow') {
-        // Inserir linha em branco: {op:"insertRow", sheet:"ABA", row:19}
-        const sid = await getSheetId(cmd.sheet, sheetId);
-        const r = await fetch(
+        // Inserir linha em branco usando batchUpdate com sheetId numérico
+        // Primeiro buscar metadados para obter o sheetId numérico
+        const metaR = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,
+          {headers:{Authorization:`Bearer ${token}`}}
+        );
+        if (!metaR.ok) throw new Error('Erro ao buscar metadados: ' + metaR.status);
+        const meta = await metaR.json();
+        const abaInfo = meta.sheets.find(s => s.properties.title === cmd.sheet);
+        if (!abaInfo) throw new Error('Aba "' + cmd.sheet + '" não encontrada');
+        const numericSheetId = abaInfo.properties.sheetId;
+        const insertR = await fetch(
           `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
           { method:'POST',
             headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
             body: JSON.stringify({ requests:[{
               insertDimension:{
-                range:{sheetId:sid, dimension:'ROWS',
+                range:{sheetId:numericSheetId, dimension:'ROWS',
                        startIndex:cmd.row-1, endIndex:cmd.row},
                 inheritFromBefore: false
               }
             }]})
           }
         );
-        if (!r.ok) throw new Error(await r.text());
-        resultados.push(`✅ insertRow → ${cmd.sheet} L${cmd.row}`);
+        if (!insertR.ok) throw new Error(await insertR.text());
+        resultados.push('✅ insertRow → ' + cmd.sheet + ' L' + cmd.row);
         ok++;
 
       } else if (cmd.op === 'clearRow') {
