@@ -2068,18 +2068,11 @@ function renderAdmin() {
       <!-- Exemplos de operações -->
       <div style="padding:16px;background:#F8FAFC;margin:0 16px 16px;border-radius:12px;border:1px solid #E2E8F0;">
         <div style="font-size:11px;font-weight:700;color:#1C2B36;margin-bottom:10px;">&#128216; Operações disponíveis:</div>
-        ${[
-          ['write',    'Escrever valor em célula específica'],
-          ['writeRow', 'Escrever linha inteira de dados'],
-          ['deleteRow','Deletar uma linha'],
-          ['insertRow','Inserir linha em posição específica'],
-          ['clearRow', 'Limpar conteúdo de uma linha'],
-          ['batchWrite','Escrever múltiplos valores de uma vez'],
-        ].map(([op,desc]) => `
-          <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;">
-            <code style="background:#1C2B36;color:#E87722;padding:2px 6px;border-radius:4px;font-size:10px;flex-shrink:0;">${op}</code>
-            <span style="font-size:11px;color:#666;">${desc}</span>
-          </div>`).join('')}
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><code style="background:#1C2B36;color:#E87722;padding:2px 6px;border-radius:4px;font-size:10px;">write</code><span style="font-size:11px;color:#666;">Escrever valor em c&#233;lula espec&#237;fica</span></div>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><code style="background:#1C2B36;color:#E87722;padding:2px 6px;border-radius:4px;font-size:10px;">writeRow</code><span style="font-size:11px;color:#666;">Escrever linha inteira de dados</span></div>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><code style="background:#1C2B36;color:#E87722;padding:2px 6px;border-radius:4px;font-size:10px;">deleteRow</code><span style="font-size:11px;color:#666;">Deletar uma linha</span></div>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><code style="background:#1C2B36;color:#E87722;padding:2px 6px;border-radius:4px;font-size:10px;">insertRow</code><span style="font-size:11px;color:#666;">Inserir linha em posi&#231;&#227;o espec&#237;fica</span></div>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><code style="background:#1C2B36;color:#E87722;padding:2px 6px;border-radius:4px;font-size:10px;">batchWrite</code><span style="font-size:11px;color:#666;">Escrever m&#250;ltiplos valores de uma vez</span></div>
       </div>
     </div>`;
 }
