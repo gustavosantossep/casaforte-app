@@ -572,7 +572,7 @@ const ABA_SHEET = {
   abastecimento:'⛽ ABASTECIMENTO',
   vales:        '👷 VALES GERAL',
   // Particular
-  part_desp:    '🏠 DESPESAS',
+  part_desp:    '📤 DESPESAS',
   part_rec:     '💵 RECEITAS',
   part_inv:     '📈 INVESTIMENTOS',
   // Confina Forte
@@ -1671,7 +1671,10 @@ async function salvar() {
       const nomeFuncionario = sel.func||'—';
       const descVale = (sel.tipo_v||'Vale')+' — '+(sel.forma||'Dinheiro');
       const stVale = sel.status||'✔ PAGO';
-      linha=[data, val, nomeFuncionario, descVale, stVale];
+      // Aba individual: A=DATA, B=VALOR, C=TIPO, D=DESCRIÇÃO, E=OBS, F=STATUS
+      linha=[data, val, sel.tipo_v||'Vale', descVale, '', stVale];
+      // Linha para VALES GERAL: A=DATA, B=VALOR, C=FUNC, D=DESCRIÇÃO, E=STATUS
+      sel._linhaValesGeral = [data, val, nomeFuncionario, descVale, stVale];
       break;
     // ── PARTICULAR ──────────────────────────────────────────────────────────
     // Estrutura planilha: DATA, VALOR, CATEGORIA, FORMA_PGTO, DESCRIÇÃO, MÊS
@@ -1735,7 +1738,33 @@ async function salvar() {
   if (podeSheets) {
     loading('Gravando na planilha...');
     try {
-      await sheetsAppend(ABA_SHEET[abaAtiva], [linha]);
+      // Para vales: salvar na aba individual E no VALES GERAL
+      if ((abaAtiva==='vales'||abaAtiva==='vales_conf') && sel._linhaValesGeral && sel.func) {
+        const FUNC_ABAS = {
+          'Dirceu':        '🔧 Dirceu',
+          'Gustavo Sutil': '📊 Gustavo Sutil',
+          'Junior':        '🛠 Junior',
+          'Daio (Odair)':  '⚙️ Daio',
+          'Daio':          '⚙️ Daio',
+          'Luiz Arruda':   '🌿 Luiz Arruda',
+          'Adão':          '🏗 Adão',
+          'Levy':          '💼 Levy',
+          'Débora':        '📋 Débora',
+          'Nezão (Adenilson)': '🔨 Nezão',
+          'Nezão':         '🔨 Nezão',
+          'João Paulo':    '📐 João Paulo',
+          'Joel':          '🪚 Joel',
+        };
+        // Extrair nome sem ícone para buscar no mapa
+        const nomeLimpo = sel.func.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+/gu, '').trim();
+        const abaIndiv = FUNC_ABAS[nomeLimpo] || FUNC_ABAS[sel.func];
+        if (abaIndiv) {
+          await sheetsAppend(abaIndiv, [linha]); // aba individual
+        }
+        await sheetsAppend(ABA_SHEET[abaAtiva], [sel._linhaValesGeral]); // VALES GERAL
+      } else {
+        await sheetsAppend(ABA_SHEET[abaAtiva], [linha]);
+      }
       P.lancs.unshift({data,d:String(desc).slice(0,35),v:val,tipo});
       if(tipo==='e'){P.entradas+=val;P.saldo+=val;}else{P.saidas+=val;P.saldo-=val;}
       renderHome();
