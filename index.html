@@ -10,6 +10,11 @@
 <title>Casa Forte</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
+/* Safe area global para Dynamic Island / notch */
+:root{
+  --sat: env(safe-area-inset-top, 50px);
+  --sab: env(safe-area-inset-bottom, 20px);
+}
 :root{
   --navy: #0A1628;
   --navy2: #0F1E35;
@@ -63,7 +68,7 @@ html,body{height:100%;font-family:'Inter',sans-serif;background:var(--navy);colo
   backdrop-filter:blur(20px);
   -webkit-backdrop-filter:blur(20px);
   border-top:1px solid var(--border);
-  padding:6px 8px max(20px,env(safe-area-inset-bottom));
+  padding:6px 8px max(var(--sab),20px);
   z-index:200;
 }
 #navbar.show{display:flex;}
@@ -248,8 +253,8 @@ select option{background:var(--navy2);}
 
 /* HEADER GRADIENT */
 .hdr{
-  padding:max(env(safe-area-inset-top,60px),60px) 20px 28px;
-  padding-top:max(env(safe-area-inset-top),60px);
+  padding:70px 20px 28px;
+  padding-top:calc(var(--sat) + 16px);
   background:linear-gradient(160deg,var(--navy) 0%,var(--navy3) 100%);
   position:relative;overflow:hidden;flex-shrink:0;
 }
@@ -473,7 +478,7 @@ select option{background:var(--navy2);}
 
 <!-- ██ LANÇAR ██ -->
 <div class="screen" id="s-lanc" style="padding-bottom:120px;">
-  <div style="background:var(--navy2);padding:max(env(safe-area-inset-top),20px) 16px 16px;border-bottom:1px solid var(--border);">
+  <div style="background:var(--navy2);padding-top:calc(var(--sat) + 14px);padding-left:16px;padding-right:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
     <div id="l-perfil" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;"></div>
     <div style="font-size:20px;font-weight:800;">Novo Lançamento</div>
   </div>
@@ -483,7 +488,7 @@ select option{background:var(--navy2);}
 
 <!-- ██ HISTÓRICO ██ -->
 <div class="screen" id="s-hist">
-  <div style="background:var(--navy2);padding:max(env(safe-area-inset-top),20px) 16px 16px;border-bottom:1px solid var(--border);">
+  <div style="background:var(--navy2);padding-top:calc(var(--sat) + 14px);padding-left:16px;padding-right:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
     <div id="hist-perfil" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;"></div>
     <div style="font-size:20px;font-weight:800;">Histórico</div>
   </div>
@@ -503,7 +508,7 @@ select option{background:var(--navy2);}
 
 <!-- ██ RELATÓRIO ██ -->
 <div class="screen" id="s-rel">
-  <div style="background:var(--navy2);padding:max(env(safe-area-inset-top),20px) 16px 16px;border-bottom:1px solid var(--border);">
+  <div style="background:var(--navy2);padding-top:calc(var(--sat) + 14px);padding-left:16px;padding-right:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
     <div id="rel-perfil" style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;"></div>
     <div style="font-size:20px;font-weight:800;">Relatório</div>
   </div>
