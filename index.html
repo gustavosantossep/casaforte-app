@@ -996,17 +996,22 @@ async function sheetsAppend(sheet, values) {
 }
 
 
-async function getSheetId(sheetName) {
-  if (_sheetIds[sheetName]) return _sheetIds[sheetName];
+async function getSheetId(sheetName, spreadsheetId) {
+  const spId = spreadsheetId || getActiveSheetId();
+  const cacheKey = spId + '|' + sheetName;
+  if (_sheetIds[cacheKey]) return _sheetIds[cacheKey];
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}?fields=sheets.properties`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spId}?fields=sheets.properties`,
     {headers:{Authorization:`Bearer ${token}`}}
   );
+  if (!r.ok) throw new Error('Erro ao buscar abas: ' + r.status);
   const data = await r.json();
   data.sheets.forEach(s => {
-    _sheetIds[s.properties.title] = s.properties.sheetId;
+    _sheetIds[spId + '|' + s.properties.title] = s.properties.sheetId;
   });
-  return _sheetIds[sheetName];
+  const result = _sheetIds[cacheKey];
+  if (result === undefined) throw new Error(`Aba "${sheetName}" não encontrada na planilha`);
+  return result;
 }
 
 async function carregarSheets(filtroMes=null) {
@@ -2116,7 +2121,7 @@ async function adminExecutar() {
 
       } else if (cmd.op === 'deleteRow') {
         // Deletar linha: {op:"deleteRow", sheet:"ABA", row:19}
-        const sid = await getSheetId(cmd.sheet);
+        const sid = await getSheetId(cmd.sheet, sheetId);
         const r = await fetch(
           `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
           { method:'POST',
@@ -2135,7 +2140,7 @@ async function adminExecutar() {
 
       } else if (cmd.op === 'insertRow') {
         // Inserir linha em branco: {op:"insertRow", sheet:"ABA", row:19}
-        const sid = await getSheetId(cmd.sheet);
+        const sid = await getSheetId(cmd.sheet, sheetId);
         const r = await fetch(
           `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
           { method:'POST',
