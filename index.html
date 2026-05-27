@@ -568,6 +568,7 @@ select option{background:var(--navy2);}
 </div>
 
 <script>
+const _sheetIds = {};
 window.onerror=function(m,s,l){console.error("ERRO:",m,"L"+l);return false;};
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
@@ -997,9 +998,6 @@ async function sheetsAppend(sheet, values) {
   return r.json();
 }
 
-
-// Cache de IDs de abas
-const _sheetIds = {};
 
 async function getSheetId(sheetName, spreadsheetId) {
   const spId = spreadsheetId || getActiveSheetId();
