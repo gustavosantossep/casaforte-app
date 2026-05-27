@@ -2056,47 +2056,14 @@ function renderAdmin() {
 
       <!-- Scripts prontos -->
       <div style="padding:16px;background:#F8FAFC;margin:0 16px;border-radius:12px;border:1px solid #E2E8F0;">
-        <div style="font-size:11px;font-weight:700;color:#1C2B36;margin-bottom:10px;">&#9889; Scripts prontos — toque para carregar:</div>
-        ${[
-          ['Corrigir venda R$1.700 (linha 19→final)', JSON.stringify([
-            {"op":"deleteRow","sheet":"💰 VENDAS","row":19},
-            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
-            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
-            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
-            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
-            {"op":"insertRow","sheet":"💰 VENDAS","row":821},
-            {"op":"writeRow","sheet":"💰 VENDAS","row":821,"values":["22/05/2026",1700,"Maio/2026",""]}
-          ])],
-          ['Inserir 10 linhas em DESPESAS', JSON.stringify([
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404},
-            {"op":"insertRow","sheet":"📤 DESPESAS EMPRESA","row":1404}
-          ])],
-          ['Inserir 10 linhas em VALES GERAL', JSON.stringify([
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38},
-            {"op":"insertRow","sheet":"👷 VALES GERAL","row":38}
-          ])],
-        ].map(([lbl,script]) => `
-          <button onclick="document.getElementById('admin-script').value='${script.replace(/'/g,"\'").replace(/
-/g,'')}';adminValidarScript();"
-            style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">
-            &#9654; ${lbl}
-          </button>`).join('')}
+        <div style="font-size:11px;font-weight:700;color:#1C2B36;margin-bottom:10px;">&#9889; Scripts prontos:</div>
+        <button onclick="adminCarregarScript(0)" style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">&#9654; Corrigir venda R$1.700 (linha 19)</button>
+        <button onclick="adminCarregarScript(1)" style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">&#9654; Inserir 10 linhas em DESPESAS</button>
+        <button onclick="adminCarregarScript(2)" style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">&#9654; Inserir 10 linhas em VALES GERAL</button>
+        <button onclick="adminCarregarScript(3)" style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">&#9654; Inserir 10 linhas em NOTAS</button>
+        <button onclick="adminCarregarScript(4)" style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">&#9654; Inserir 10 linhas em CHEQUES CLI</button>
+        <button onclick="adminCarregarScript(5)" style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">&#9654; Inserir 10 linhas em CHEQUES EMIT</button>
+        <button onclick="adminCarregarScript(6)" style="width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:11px;color:#1C2B36;cursor:pointer;margin-bottom:6px;">&#9654; Inserir 10 linhas em ABASTECIMENTO</button>
       </div>
 
       <!-- Exemplos de operações -->
@@ -2274,6 +2241,42 @@ function colLetra(n) {
 }
 
 
+
+// Scripts prontos para o Admin
+function adminGetScripts() {
+  return [
+    // 0: Corrigir venda R$1.700
+    [
+      {op:'deleteRow', sheet:'💰 VENDAS', row:19},
+      {op:'insertRow', sheet:'💰 VENDAS', row:821},
+      {op:'insertRow', sheet:'💰 VENDAS', row:821},
+      {op:'insertRow', sheet:'💰 VENDAS', row:821},
+      {op:'insertRow', sheet:'💰 VENDAS', row:821},
+      {op:'insertRow', sheet:'💰 VENDAS', row:821},
+      {op:'writeRow',  sheet:'💰 VENDAS', row:821, values:['22/05/2026',1700,'Maio/2026','']},
+    ],
+    // 1: 10 linhas em DESPESAS
+    Array.from({length:10}, (_,i) => ({op:'insertRow', sheet:'📤 DESPESAS EMPRESA', row:1404})),
+    // 2: 10 linhas em VALES GERAL
+    Array.from({length:10}, (_,i) => ({op:'insertRow', sheet:'👷 VALES GERAL', row:38})),
+    // 3: 10 linhas em NOTAS
+    Array.from({length:10}, (_,i) => ({op:'insertRow', sheet:'🗒 NOTAS SEM BOLETO', row:243})),
+    // 4: 10 linhas em CHEQUES CLI
+    Array.from({length:10}, (_,i) => ({op:'insertRow', sheet:'🧾 CHEQUES CLIENTES', row:661})),
+    // 5: 10 linhas em CHEQUES EMIT
+    Array.from({length:10}, (_,i) => ({op:'insertRow', sheet:'📝 CHEQUES EMITIDOS', row:935})),
+    // 6: 10 linhas em ABASTECIMENTO
+    Array.from({length:10}, (_,i) => ({op:'insertRow', sheet:'⛽ ABASTECIMENTO', row:84})),
+  ];
+}
+
+function adminCarregarScript(idx) {
+  const script = adminGetScripts()[idx];
+  document.getElementById('admin-script').value = JSON.stringify(script, null, 2);
+  adminValidarScript();
+  // Scroll para o campo
+  document.getElementById('admin-script').scrollIntoView({behavior:'smooth'});
+}
 </script>
 </body>
 </html>
