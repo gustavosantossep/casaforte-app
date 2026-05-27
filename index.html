@@ -977,18 +977,78 @@ async function sheetsUpdateCell(range, values) {
 }
 
 async function sheetsAppend(sheet, values) {
-  // Determinar range correto pelo número de colunas
+  const spId = getActiveSheetId();
   const numCols = values[0] ? values[0].length : 6;
   const colFinal = 'ABCDEFGHIJ'[numCols - 1] || 'J';
-  const rangeAppend = `${sheet}!A:${colFinal}`;
 
-  // SEMPRE append no final — simples, direto, sem bugs
+  // Ler últimas 50 linhas para encontrar SUBTOTAL
+  try {
+    const leituraR = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spId}/values/${encodeURIComponent(sheet+'!A:A')}`,
+      {headers:{Authorization:`Bearer ${token}`}}
+    );
+    if (leituraR.ok) {
+      const leituraD = await leituraR.json();
+      const rows = leituraD.values || [];
+      // Procurar linha de SUBTOTAL do mês atual (a última linha de SUBTOTAL)
+      let linhaSubtotal = -1;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const v = String(rows[i][0] || '').toUpperCase();
+        if (v.includes('SUBTOTAL')) {
+          linhaSubtotal = i + 1; // 1-based
+          break;
+        }
+      }
+
+      if (linhaSubtotal > 0) {
+        // Inserir linha ANTES do subtotal usando batchUpdate
+        const metaR = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${spId}?fields=sheets.properties`,
+          {headers:{Authorization:`Bearer ${token}`}}
+        );
+        if (metaR.ok) {
+          const meta = await metaR.json();
+          const abaInfo = meta.sheets.find(s => s.properties.title === sheet);
+          if (abaInfo) {
+            const numSid = abaInfo.properties.sheetId;
+            // Inserir linha em branco antes do subtotal
+            await fetch(
+              `https://sheets.googleapis.com/v4/spreadsheets/${spId}:batchUpdate`,
+              { method:'POST',
+                headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+                body: JSON.stringify({requests:[{insertDimension:{
+                  range:{sheetId:numSid,dimension:'ROWS',
+                         startIndex:linhaSubtotal-1,endIndex:linhaSubtotal},
+                  inheritFromBefore:true
+                }}]})
+              }
+            );
+            // Escrever dados na nova linha
+            const range = `${sheet}!A${linhaSubtotal}:${colFinal}${linhaSubtotal}`;
+            const writeR = await fetch(
+              `https://sheets.googleapis.com/v4/spreadsheets/${spId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+              { method:'PUT',
+                headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+                body: JSON.stringify({values})
+              }
+            );
+            if (!writeR.ok) throw new Error('Erro ao escrever: ' + writeR.status);
+            return writeR.json();
+          }
+        }
+      }
+    }
+  } catch(e) {
+    console.warn('sheetsAppend fallback:', e.message);
+  }
+
+  // Fallback: append simples no final
+  const rangeAppend = `${sheet}!A:${colFinal}`;
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${getActiveSheetId()}/values/${encodeURIComponent(rangeAppend)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values })
+    `https://sheets.googleapis.com/v4/spreadsheets/${spId}/values/${encodeURIComponent(rangeAppend)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    { method:'POST',
+      headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+      body: JSON.stringify({values})
     }
   );
   if (!r.ok) {
@@ -997,6 +1057,7 @@ async function sheetsAppend(sheet, values) {
   }
   return r.json();
 }
+
 
 
 async function getSheetId(sheetName, spreadsheetId) {
