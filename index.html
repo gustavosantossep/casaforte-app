@@ -998,6 +998,9 @@ async function sheetsAppend(sheet, values) {
 }
 
 
+// Cache de IDs de abas
+const _sheetIds = {};
+
 async function getSheetId(sheetName, spreadsheetId) {
   const spId = spreadsheetId || getActiveSheetId();
   const cacheKey = spId + '|' + sheetName;
